@@ -1282,12 +1282,12 @@ $script:subB.Add_Click({
             try {
                 Download-MediaFire $mfUrl $zipFile
                 $installResult = Extract-AndInstall $zipFile $gameName $expDate
-                if ($duration -gt 0 -and $expDate) {
-                    $timers = Get-ActiveTimers
-                    $internetNow = Get-InternetTime
-                    $timers += @{redeem_code=$code;expires_at=$expDate.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
-                    Save-Timers $timers
-                }
+                # Always save to timers file (permanent = expires in 1 year)
+                $timerExp = if ($expDate) { $expDate } else { (Get-Date).AddYears(1) }
+                $timers = Get-ActiveTimers
+                $internetNow = Get-InternetTime
+                $timers += @{redeem_code=$code;expires_at=$timerExp.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
+                Save-Timers $timers
                 $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=(Get-Date);ExpiresAt=$(if($expDate){$expDate}else{(Get-Date).AddYears(1)})})|Out-Null
                 $successCount++
             } catch { $errors+="$gameName : $($_.Exception.Message)"; Write-ErrorLog "Download $gameName" $_ }
