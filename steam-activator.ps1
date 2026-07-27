@@ -1,5 +1,5 @@
 <#
-    BastissSteam Activator v1.0
+    BastissSteam Activator v2.0
     PowerShell 5.1 WinForms GUI
 #>
 
