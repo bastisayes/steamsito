@@ -1,0 +1,12 @@
+{
+  "name": "codes-server",
+  "version": "1.0.0",
+  "description": "Code redemption server for Fixes Steam",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

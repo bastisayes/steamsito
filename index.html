@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canje de Codigos - Fixes Steam</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#0a0e14;color:#e6e6e6;min-height:100vh;}
+.container{max-width:860px;margin:0 auto;padding:24px;}
+.header{text-align:center;margin-bottom:28px;}
+.header h1{color:#00d4ff;font-size:30px;font-weight:800;letter-spacing:-.5px;}
+.header p{color:#6a737d;font-size:14px;margin-top:4px;}
+.panel{background:#141a23;border:1px solid #252c36;border-radius:10px;padding:28px;}
+.form-group{margin-bottom:18px;}
+label{display:block;margin-bottom:6px;color:#6a737d;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;}
+input,textarea,select{width:100%;padding:11px 14px;background:#0a0e14;border:1px solid #252c36;border-radius:8px;color:#e6e6e6;font-size:14px;transition:border .2s,box-shadow .2s;}
+input:focus,textarea:focus{outline:none;border-color:#00d4ff;box-shadow:0 0 0 3px rgba(0,212,255,.1);}
+input::placeholder,textarea::placeholder{color:#484f58;}
+.btn{padding:11px 22px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:#00d4ff;color:#0a0e14;}
+.btn-primary:hover{background:#00b8d4;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,212,255,.25);}
+.btn-danger{background:#f85149;color:#fff;}
+.btn-danger:hover{background:#d93a3a;transform:translateY(-1px);}
+.btn-success{background:#00ff88;color:#0a0e14;}
+.btn-success:hover{background:#00cc6a;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,255,136,.25);}
+.btn-sm{padding:7px 14px;font-size:12px;}
+.btn-ghost{background:#252c36;color:#e6e6e6;}
+.btn-ghost:hover{background:#2d3540;}
+.msg{padding:13px 18px;border-radius:8px;margin-bottom:18px;font-size:14px;display:none;line-height:1.4;}
+.msg.error{display:block;background:#2d1b1b;border:1px solid #f85149;color:#f85149;}
+.msg.success{display:block;background:#1b2d1b;border:1px solid #00ff88;color:#00ff88;}
+.msg.info{display:block;background:#1b2d2b;border:1px solid #00d4ff;color:#00d4ff;}
+.link-item{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.link-item input{flex:1;}
+.link-item .btn-remove{background:#f8514933;color:#f85149;border:1px solid #f8514944;border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.link-item .btn-remove:hover{background:#f8514966;}
+.links-container{margin-bottom:14px;}
+.section-title{color:#00d4ff;font-size:16px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #252c36;}
+.codes-grid{display:grid;gap:10px;}
+.code-card{background:#0a0e14;border:1px solid #252c36;border-radius:8px;padding:14px 18px;}
+.code-card .code{color:#00d4ff;font-family:'Cascadia Code','Fira Code',monospace;font-size:15px;font-weight:700;letter-spacing:.5px;}
+.code-card .meta{color:#6a737d;font-size:12px;margin-top:5px;}
+.code-card .links-list{margin-top:8px;font-size:12px;}
+.code-card .links-list a{color:#00ff88;text-decoration:none;display:block;padding:3px 0;word-break:break-all;}
+.code-card .links-list a:hover{text-decoration:underline;color:#33ffaa;}
+.code-card .status-used{color:#00ff88;font-weight:600;}
+.code-card .status-full{color:#f85149;font-weight:600;}
+.code-card .status-available{color:#00d4ff;font-weight:600;}
+.code-card .redeemed-list{color:#6a737d;font-size:11px;margin-top:6px;word-break:break-all;}
+.code-card .card-actions{margin-top:10px;}
+.footer{text-align:center;color:#252c36;font-size:12px;margin-top:32px;padding:16px;border-top:1px solid #252c36;}
+hr.divider{border:none;border-top:2px solid #252c36;margin:24px 0;}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<h1>Canje de C&oacute;digos</h1>
+<p>Sistema de canje para fixes de Steam</p>
+</div>
+<div class="panel">
+<div id="adminMsg" class="msg"></div>
+<div class="section-title">Crear nuevo c&oacute;digo</div>
+<div class="form-group">
+<label>C&oacute;digo (vac&iacute;o = autom&aacute;tico)</label>
+<input type="text" id="newCode" placeholder="Ej: XVSX-VXHA-ASDA-XDASD" maxlength="50" onkeyup="this.value=this.value.toUpperCase()" autocomplete="off">
+</div>
+<div class="form-group">
+<label>Usos m&aacute;ximos</label>
+<input type="number" id="maxUses" value="1" min="1" max="999">
+</div>
+<div class="form-group">
+<label>Duraci&oacute;n</label>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+<div style="display:flex;align-items:center;gap:4px">
+<input type="number" id="durD" value="0" min="0" max="365" style="width:55px;text-align:center" oninput="calcDur()">
+<span style="color:#6a737d;font-size:12px">d&iacute;as</span>
+</div>
+<div style="display:flex;align-items:center;gap:4px">
+<input type="number" id="durH" value="1" min="0" max="23" style="width:55px;text-align:center" oninput="calcDur()">
+<span style="color:#6a737d;font-size:12px">horas</span>
+</div>
+<div style="display:flex;align-items:center;gap:4px">
+<input type="number" id="durM" value="0" min="0" max="59" style="width:55px;text-align:center" oninput="calcDur()">
+<span style="color:#6a737d;font-size:12px">min</span>
+</div>
+<div style="display:flex;align-items:center;gap:4px">
+<input type="number" id="durS" value="0" min="0" max="59" style="width:55px;text-align:center" oninput="calcDur()">
+<span style="color:#6a737d;font-size:12px">seg</span>
+</div>
+<input type="hidden" id="duration" value="3600">
+<span id="durTotal" style="color:#00d4ff;font-size:12px;margin-left:8px">= 1 hora</span>
+</div>
+<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+<button class="btn btn-sm btn-ghost" type="button" onclick="setDur(0,1,0,0)">1 hora</button>
+<button class="btn btn-sm btn-ghost" type="button" onclick="setDur(0,8,0,0)">8 horas</button>
+<button class="btn btn-sm btn-ghost" type="button" onclick="setDur(1,0,0,0)">1 d&iacute;a</button>
+<button class="btn btn-sm btn-ghost" type="button" onclick="setDur(7,0,0,0)">7 d&iacute;as</button>
+<button class="btn btn-sm btn-ghost" type="button" onclick="setDur(30,0,0,0)">30 d&iacute;as</button>
+<button class="btn btn-sm btn-ghost" type="button" onclick="setDur(0,0,0,0)">Permanente</button>
+</div>
+</div>
+<div class="form-group">
+<label>Links de MediaFire</label>
+<div class="links-container" id="linksContainer">
+<div class="link-item"><input type="text" class="link-input" placeholder="https://www.mediafire.com/file/..." autocomplete="off"><button class="btn-remove" onclick="removeLink(this)">&times;</button></div>
+</div>
+<button class="btn btn-sm btn-primary" onclick="addLink()">+ Agregar link</button>
+</div>
+<button class="btn btn-success" onclick="createCode()">Crear C&oacute;digo</button>
+<hr class="divider">
+<div class="section-title">C&oacute;digos existentes</div>
+<div id="codesList"><p style="color:#6a737d;text-align:center;padding:20px 0">Cargando...</p></div>
+</div>
+<div class="footer">Code Server &bull; Node.js</div>
+</div>
+<script>
+function calcDur() {
+    const d = parseInt(document.getElementById('durD').value) || 0;
+    const h = parseInt(document.getElementById('durH').value) || 0;
+    const m = parseInt(document.getElementById('durM').value) || 0;
+    const s = parseInt(document.getElementById('durS').value) || 0;
+    const total = d*86400 + h*3600 + m*60 + s;
+    document.getElementById('duration').value = total;
+    const t = document.getElementById('durTotal');
+    if (total === 0) { t.textContent = '= Permanente'; return }
+    let parts = [];
+    if (d > 0) parts.push(d + 'd');
+    if (h > 0) parts.push(h + 'h');
+    if (m > 0) parts.push(m + 'm');
+    if (s > 0) parts.push(s + 's');
+    t.textContent = '= ' + parts.join(' ');
+}
+function setDur(d,h,m,s) {
+    document.getElementById('durD').value = d;
+    document.getElementById('durH').value = h;
+    document.getElementById('durM').value = m;
+    document.getElementById('durS').value = s;
+    calcDur();
+}
+calcDur();
+loadCodes();
+function showMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.className = 'msg ' + type;
+    el.textContent = text;
+    el.style.display = 'block';
+    if (type === 'success') { setTimeout(() => { el.style.display = 'none' }, 4000) }
+}
+function addLink(val) {
+    val = val || '';
+    const c = document.getElementById('linksContainer');
+    const d = document.createElement('div');
+    d.className = 'link-item';
+    d.innerHTML = '<input type="text" class="link-input" placeholder="https://www.mediafire.com/file/..." value="' + val.replace(/"/g,'&quot;') + '" autocomplete="off"><button class="btn-remove" onclick="removeLink(this)">&times;</button>';
+    c.appendChild(d);
+}
+function removeLink(btn) {
+    const c = document.getElementById('linksContainer');
+    if (c.children.length <= 1) { return }
+    btn.parentElement.remove();
+}
+function getLinks() {
+    return Array.from(document.querySelectorAll('.link-input')).map(i => i.value.trim()).filter(v => v);
+}
+function validateLinks(links) {
+    for (const l of links) {
+        if (!l.startsWith('http://') && !l.startsWith('https://')) { return 'Link invalido: ' + l }
+    }
+    return null;
+}
+function formatDuration(secs) {
+    if (secs <= 0) return 'Permanente';
+    const d = Math.floor(secs/86400);
+    const h = Math.floor((secs%86400)/3600);
+    const m = Math.floor((secs%3600)/60);
+    const s = secs%60;
+    let parts = [];
+    if (d > 0) parts.push(d + 'd');
+    if (h > 0) parts.push(h + 'h');
+    if (m > 0) parts.push(m + 'm');
+    if (s > 0) parts.push(s + 's');
+    return parts.join(' ');
+}
+async function createCode() {
+    const code = document.getElementById('newCode').value.trim().toUpperCase() || generateAutoCode();
+    const maxUses = parseInt(document.getElementById('maxUses').value) || 1;
+    const duration = parseInt(document.getElementById('duration').value) || 0;
+    const links = getLinks();
+    const err = validateLinks(links);
+    if (err) { showMsg('adminMsg', err, 'error'); return }
+    if (links.length === 0) { showMsg('adminMsg', 'Agrega al menos un link', 'error'); return }
+    const res = await fetch('/api/create-code', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({code, max_uses:maxUses, links, duration})
+    });
+    const data = await res.json();
+    if (data.ok) {
+        showMsg('adminMsg', 'Codigo creado: ' + code, 'success');
+        document.getElementById('newCode').value = '';
+        loadCodes();
+    } else { showMsg('adminMsg', data.err, 'error') }
+}
+function generateAutoCode() {
+    const r = () => Math.random().toString(36).substring(2,6).toUpperCase();
+    return r() + '-' + r() + '-' + r() + '-' + r();
+}
+async function loadCodes() {
+    try {
+        const res = await fetch('/api/codes');
+        const data = await res.json();
+        const list = document.getElementById('codesList');
+        if (!data.codes || Object.keys(data.codes).length === 0) {
+            list.innerHTML = '<p style="color:#6a737d;text-align:center;padding:20px 0">No hay codigos todavia</p>';
+            return;
+        }
+        let html = '<div class="codes-grid">';
+        const sorted = Object.entries(data.codes).sort((a,b) => (b[1].pinned?1:0) - (a[1].pinned?1:0));
+        for (const [code, info] of sorted) {
+            const status = info.used_count >= info.max_uses ? 'status-full' : (info.used_count > 0 ? 'status-used' : 'status-available');
+            const statusText = info.used_count >= info.max_uses ? 'AGOTADO' : (info.used_count + '/' + info.max_uses + ' usos');
+            const pinIcon = info.pinned ? '&#128204;' : '';
+            html += '<div class="code-card"><div class="code">' + pinIcon + ' ' + code + '</div>';
+            html += '<div class="meta">Usos: <span class="' + status + '">' + statusText + '</span> &bull; Duracion: ' + formatDuration(info.duration) + '</div>';
+            html += '<div class="links-list">' + info.links.map(l => '<a href="' + l + '" target="_blank">' + l + '</a>').join('') + '</div>';
+            html += '<div class="redeemed-list">IDs: ' + (info.redeemed_by && info.redeemed_by.length > 0 ? info.redeemed_by.join(', ') : 'ninguno') + '</div>';
+            html += '<div class="card-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">';
+            html += '<button class="btn btn-sm btn-ghost" onclick="pinCode(\'' + code.replace(/'/g,"\\'") + '\')">' + (info.pinned ? 'Desfijar' : 'Fijar') + '</button>';
+            html += '<button class="btn btn-sm btn-primary" onclick="duplicateCode(\'' + code.replace(/'/g,"\\'") + '\')">Duplicar</button>';
+            html += '<button class="btn btn-sm btn-ghost" onclick="renewCode(\'' + code.replace(/'/g,"\\'") + '\')">Renovar</button>';
+            if (info.redeemed_by && info.redeemed_by.length > 0) {
+                html += '<button class="btn btn-sm btn-danger" onclick="showRemoveRedeemed(\'' + code.replace(/'/g,"\\'") + '\',[\'' + info.redeemed_by.join("','") + '\'])">Remover PC</button>';
+            }
+            html += '<button class="btn btn-sm btn-danger" onclick="deleteCode(\'' + code.replace(/'/g,"\\'") + '\')">Eliminar</button>';
+            html += '</div></div>';
+        }
+        html += '</div>';
+        list.innerHTML = html;
+    } catch(e) { document.getElementById('codesList').innerHTML = '<p style="color:#f85149">Error: ' + e.message + '</p>' }
+}
+async function deleteCode(code) {
+    if (!confirm('Eliminar codigo ' + code + '?')) { return }
+    const res = await fetch('/api/delete-code', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({code})
+    });
+    const data = await res.json();
+    if (data.ok) { showMsg('adminMsg', 'Codigo eliminado: ' + code, 'success'); loadCodes() }
+    else { showMsg('adminMsg', data.err, 'error') }
+}
+async function pinCode(code) {
+    const res = await fetch('/api/pin-code', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({code})
+    });
+    const data = await res.json();
+    if (data.ok) { showMsg('adminMsg', data.pinned ? 'Codigo fijado: ' + code : 'Codigo desfijado: ' + code, 'success'); loadCodes() }
+    else { showMsg('adminMsg', data.err, 'error') }
+}
+async function renewCode(code) {
+    if (!confirm('Renovar codigo ' + code + '? Se resetearan los usos y personas.')) { return }
+    const res = await fetch('/api/renew-code', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({code})
+    });
+    const data = await res.json();
+    if (data.ok) { showMsg('adminMsg', 'Codigo renovado: ' + code, 'success'); loadCodes() }
+    else { showMsg('adminMsg', data.err, 'error') }
+}
+function duplicateCode(code) {
+    fetch('/api/codes').then(r=>r.json()).then(data => {
+        const info = data.codes[code];
+        if (!info) return;
+        document.getElementById('newCode').value = '';
+        document.getElementById('maxUses').value = info.max_uses;
+        const d = info.duration || 0;
+        document.getElementById('durD').value = Math.floor(d/86400);
+        document.getElementById('durH').value = Math.floor((d%86400)/3600);
+        document.getElementById('durM').value = Math.floor((d%3600)/60);
+        document.getElementById('durS').value = d%60;
+        calcDur();
+        document.getElementById('linksContainer').innerHTML = '';
+        info.links.forEach(l => addLink(l));
+        showMsg('adminMsg', 'Copiado de ' + code + ' - edita el codigo y dale Crear', 'info');
+        window.scrollTo({top:0,behavior:'smooth'});
+    });
+}
+function showRemoveRedeemed(code, ids) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center';
+    let inner = '<div style="background:#141a23;border:1px solid #252c36;border-radius:10px;padding:24px;max-width:400px;width:90%">';
+    inner += '<h3 style="color:#00d4ff;margin-bottom:16px">Remover PC de: ' + code + '</h3>';
+    ids.forEach(id => {
+        inner += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0a0e14;border:1px solid #252c36;border-radius:6px;margin-bottom:6px">';
+        inner += '<span style="color:#e6e6e6;font-family:Consolas;font-size:12px">' + id + '</span>';
+        inner += '<button class="btn btn-sm btn-danger" onclick="removeRedeemed(\'' + code.replace(/'/g,"\\'") + '\',\'' + id + '\',this)">X</button>';
+        inner += '</div>';
+    });
+    inner += '<button class="btn btn-sm btn-ghost" style="margin-top:12px;width:100%" onclick="this.closest(\'div[style*=fixed]\').remove()">Cerrar</button>';
+    inner += '</div>';
+    overlay.innerHTML = inner;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() });
+    document.body.appendChild(overlay);
+}
+async function removeRedeemed(code, cid, btn) {
+    const res = await fetch('/api/remove-redeemed', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({code, client_id:cid})
+    });
+    const data = await res.json();
+    if (data.ok) {
+        btn.parentElement.remove();
+        showMsg('adminMsg', cid + ' removido de ' + code, 'success');
+        loadCodes();
+    } else { showMsg('adminMsg', data.err, 'error') }
+}
+</script>
+</body>
+</html>
