@@ -161,8 +161,14 @@ function Get-Now {
 }
 
 function Get-ActiveTimers {
-    if (Test-Path $TIMERS_FILE) { try { $r = @(Get-Content $TIMERS_FILE -Raw | ConvertFrom-Json); return ,$r } catch {} }
-    return @()
+    $result = @()
+    if (Test-Path $TIMERS_FILE) {
+        try {
+            $data = Get-Content $TIMERS_FILE -Raw | ConvertFrom-Json
+            if ($data -is [array]) { $result = $data } else { $result = @($data) }
+        } catch {}
+    }
+    return $result
 }
 
 function Save-Timers {
