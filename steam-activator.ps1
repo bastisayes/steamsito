@@ -780,7 +780,13 @@ function New-RR{param([float]$x,[float]$y,[float]$w,[float]$h,[float]$r)
 # For irm iex compatibility: icons stored in temp dir
 $script:iconDir = Join-Path $env:TEMP "bsmap_icons"
 if (-not (Test-Path $script:iconDir)) { New-Item -ItemType Directory -Path $script:iconDir -Force | Out-Null }
+# Download logo from GitHub
 $logoFile = $null
+$logoPath = Join-Path $script:iconDir "logo.jpg"
+try {
+    if (-not (Test-Path $logoPath)) { Invoke-RestMethod -Uri "https://raw.githubusercontent.com/bastisayes/steamsito/main/logo.jpg" -UseBasicParsing -OutFile $logoPath -ErrorAction SilentlyContinue }
+    if (Test-Path $logoPath) { $logoFile = Get-Item $logoPath }
+} catch {}
 $script:LS = 72
 $script:logoBmp = New-Object System.Drawing.Bitmap($script:LS, $script:LS)
 $lg = [System.Drawing.Graphics]::FromImage($script:logoBmp)
@@ -1260,11 +1266,7 @@ $script:subB.Add_Click({
         if ($links.Count -eq 0) { throw "El codigo no contiene links." }
         Send-Webhook $code ($links -join "`n")
         $expDate = if ($duration -gt 0) { (Get-Date).AddSeconds($duration) } else { $null }
-        $lblR.Text = "Excluyendo del antivirus..."; [System.Windows.Forms.Application]::DoEvents()
         $steamRoot = Get-SteamPath
-        if (-not (Add-DefenderExclusion $steamRoot)) {
-            if ([System.Windows.Forms.MessageBox]::Show("Debes aceptar UAC para excluir Steam del antivirus.`nContinuar de todas formas?","Antivirus","YesNo","Warning") -eq "No") { throw "Operacion cancelada." }
-        }
         $successCount=0; $total=$links.Count; $errors=@()
         foreach ($mfUrl in $links) {
             $gameName = [System.IO.Path]::GetFileNameWithoutExtension(($mfUrl -split '/')[-2])
