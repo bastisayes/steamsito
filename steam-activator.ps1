@@ -1281,9 +1281,9 @@ $script:subB.Add_Click({
                 $timerExp = if ($expDate) { $expDate } else { (Get-Date).AddYears(1) }
                 $timers = Get-ActiveTimers
                 $internetNow = Get-InternetTime
-                $timers += @{redeem_code=$code;expires_at=$timerExp.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
+                $timers += @{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
                 Save-Timers $timers
-                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=(Get-Date);ExpiresAt=$(if($expDate){$expDate}else{(Get-Date).AddYears(1)})})|Out-Null
+                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=(Get-Date);ExpiresAt=$(if($expDate){$expDate}else{(Get-Date).AddYears(1)});Duration=$duration})|Out-Null
                 $successCount++
             } catch { $errors+="$gameName : $($_.Exception.Message)"; Write-ErrorLog "Download $gameName" $_ }
             Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
@@ -1345,11 +1345,15 @@ $script:clp.Add_Paint({param($s,$e)
     }
     $ch2=58;$gp2=6;$yP=0
     foreach($c in $codes){
-        $now=Get-Date;$exp=$c.ExpiresAt;$dl=[int]([math]::Ceiling(($exp-$now).TotalDays))
-        if($dl -le 0){$st=T "expirado";$sc=$script:Red}
-        elseif($dl -le 3){$st="$(T 'expiraEn') $dl $(if($dl-ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
-        elseif($dl -le 7){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
-        else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+        $isPermanent = $c.Duration -eq 0
+        if($isPermanent){$st="Permanente";$sc=$script:Green}
+        else{
+            $now=Get-Date;$exp=$c.ExpiresAt;$dl=[int]([math]::Ceiling(($exp-$now).TotalDays))
+            if($dl -le 0){$st=T "expirado";$sc=$script:Red}
+            elseif($dl -le 3){$st="$(T 'expiraEn') $dl $(if($dl-ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
+            elseif($dl -le 7){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
+            else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+        }
         $p2=New-RR 0 $yP ($s.Width-1) $ch2 8
         $bg3=New-Object System.Drawing.SolidBrush($script:CardBG);$bp2=New-Object System.Drawing.Pen($script:CardBorder,1)
         $g.FillPath($bg3,$p2);$g.DrawPath($bp2,$p2);$bg3.Dispose();$bp2.Dispose();$p2.Dispose()
@@ -1577,7 +1581,8 @@ function Sync-ActiveCodesFromTimers {
         if (-not $exp) { continue }
         if ($memGameNames -contains $t.game_name) { continue }
         $c = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }
-        $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=(Get-Date);ExpiresAt=$exp})|Out-Null
+        $d = if ($t.PSObject.Properties.Name -contains 'duration') { $t.duration } else { $null }
+        $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=(Get-Date);ExpiresAt=$exp;Duration=$d})|Out-Null
     }
 }
 Sync-ActiveCodesFromTimers
