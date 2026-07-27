@@ -676,7 +676,7 @@ function Start-Countdown {
 # Timer list (backed by timers file)
 $script:refreshTimers = New-Object System.Windows.Forms.Timer
 $script:refreshTimers.Interval = 5000
-$script:refreshTimers.Add_Tick({ Remove-ExpiredTimers | Out-Null; Sync-ActiveCodesFromTimers })
+$script:refreshTimers.Add_Tick({ Remove-ExpiredTimers | Out-Null; Sync-ActiveCodesFromTimers; Refresh-Codes })
 $script:refreshTimers.Start()
 
 # URL checker every 60s
@@ -1134,7 +1134,7 @@ $script:c4=New-Card -X ($PAD+$HW+$GAP) -Y $R2Y -W $HW -H $CH -Title (T "desinsta
     foreach ($t in $timers) {
         try { $root=$t.steam_root; foreach ($f in $t.lua_files) { Remove-FileHard (Join-Path (Join-Path $root "config\stplug-in") $f); Remove-FileHard (Join-Path (Join-Path $root "config\lua") $f) }; foreach ($f in $t.manifest_files) { Remove-FileHard (Join-Path (Join-Path $root "config\depotcache") $f) } } catch { $errors++ }
     }
-    Save-Timers @(); Sync-ActiveCodesFromTimers
+    Save-Timers @(); $script:activeCodes.Clear(); Refresh-Codes
     [System.Windows.Forms.MessageBox]::Show("Juegos eliminados correctamente.","Listo","OK","Information")
 }
 $script:mp.Controls.Add($script:c4)
@@ -1568,15 +1568,17 @@ $script:steamWatchTimer.Start()
 
 # Sync activeCodes from real timer file on startup
 function Sync-ActiveCodesFromTimers {
+    # Only add codes from file that aren't in memory yet (never remove from memory here)
+    if (-not (Test-Path $TIMERS_FILE)) { return }
     $realTimers = Get-ActiveTimers
-    $script:activeCodes.Clear()
+    $memGameNames = @($script:activeCodes | ForEach-Object { $_.Game })
     foreach ($t in $realTimers) {
         $exp = $t.expires_at -as [datetime]
         if (-not $exp) { continue }
+        if ($memGameNames -contains $t.game_name) { continue }
         $c = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }
         $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=(Get-Date);ExpiresAt=$exp})|Out-Null
     }
-    Refresh-Codes
 }
 Sync-ActiveCodesFromTimers
 
