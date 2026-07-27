@@ -1279,10 +1279,10 @@ $script:subB.Add_Click({
                 if ($duration -gt 0 -and $expDate) {
                     $timers = Get-ActiveTimers
                     $internetNow = Get-InternetTime
-                    $timers += @{expires_at=$expDate.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
+                    $timers += @{redeem_code=$code;expires_at=$expDate.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
                     Save-Timers $timers
                 }
-                $script:activeCodes.Add(@{Code=$mfUrl;Game=$gameName;ActivatedAt=(Get-Date);ExpiresAt=$(if($expDate){$expDate}else{(Get-Date).AddYears(1)})})|Out-Null
+                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=(Get-Date);ExpiresAt=$(if($expDate){$expDate}else{(Get-Date).AddYears(1)})})|Out-Null
                 $successCount++
             } catch { $errors+="$gameName : $($_.Exception.Message)"; Write-ErrorLog "Download $gameName" $_ }
             Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
@@ -1572,7 +1572,8 @@ function Sync-ActiveCodesFromTimers {
     foreach ($t in $realTimers) {
         $exp = $t.expires_at -as [datetime]
         if (-not $exp) { continue }
-        $script:activeCodes.Add(@{Code="timer";Game=$t.game_name;ActivatedAt=(Get-Date);ExpiresAt=$exp})|Out-Null
+        $c = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }
+        $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=(Get-Date);ExpiresAt=$exp})|Out-Null
     }
     Refresh-Codes
 }
