@@ -247,7 +247,7 @@ try {
 function Download-MediaFire {
     param([string]$url, [string]$outFile, $progressBar = $null, [int]$progressStart = 0, [int]$progressEnd = 100)
     $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    if ($url -match "github\.com.*/raw/") {
+    if ($url -match "github\.com.*/(raw/|releases/download/)") {
         $dlUrl = $url; $cc = $null
     } else {
         $pageReq = [System.Net.HttpWebRequest]::Create($url)
@@ -573,13 +573,13 @@ function Activar-Directo {
 # ---- Repair helpers ----
 function Get-FixesList {
     try {
-        $r = Invoke-RestMethod -Uri "https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=3o9127pseyx49&response_format=json&content_type=files" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $r = Invoke-RestMethod -Uri "https://api.github.com/repos/bastisayes/Fixes-steam/releases/tags/bastisss" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
     } catch { return @{} }
     $fixes = @{}
-    if ($r.response.folder_content.files) {
-        foreach ($f in $r.response.folder_content.files) {
-            $name = $f.filename -replace '\.zip$', ''
-            $fixes[$name] = $f.links.normal_download
+    if ($r.assets) {
+        foreach ($a in $r.assets) {
+            $name = $a.name -replace '\.zip$', ''
+            $fixes[$name] = $a.browser_download_url
         }
     }
     return $fixes
@@ -1433,9 +1433,9 @@ $script:steamWatchTimer.Add_Tick({
         if ($script:fixesJob -eq $null -and ($script:fixesCache.Count -eq 0 -or ((Get-Date) - $script:fixesCacheTime).TotalSeconds -gt 120)) {
             $script:fixesJob = Start-Job -ScriptBlock {
                 try {
-                    $r = Invoke-RestMethod -Uri "https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=3o9127pseyx49&response_format=json&content_type=files" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                    $r = Invoke-RestMethod -Uri "https://api.github.com/repos/bastisayes/Fixes-steam/releases/tags/bastisss" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
                     $fixes = @{}
-                    if ($r.response.folder_content.files) { foreach ($f in $r.response.folder_content.files) { $fixes[($f.filename -replace '\.zip$', '')] = $f.links.normal_download } }
+                    if ($r.assets) { foreach ($a in $r.assets) { $fixes[($a.name -replace '\.zip$', '')] = $a.browser_download_url } }
                     return $fixes
                 } catch { return @{} }
             }
@@ -1492,7 +1492,7 @@ $script:steamWatchTimer.Add_Tick({
                                 $fn, $fu = Find-FixForGame $gn $fixes
                                 if ($fu) {
                                     $zipPath = Join-Path $env:TEMP "predl_$(Get-Random).zip"
-                                    $dlJob = Start-Job -ScriptBlock { param($u, $o) try { $page = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop; $dl = $page.Links | Where-Object { $_.id -eq "downloadButton" } | Select-Object -ExpandProperty href; if (-not $dl) { throw "No download link" }; (New-Object System.Net.WebClient).DownloadFile($dl, $o) } catch {} } -ArgumentList $fu, $zipPath
+                                    $dlJob = Start-Job -ScriptBlock { param($u, $o) try { (New-Object System.Net.WebClient).DownloadFile($u, $o) } catch {} } -ArgumentList $fu, $zipPath
                                     $script:downloadPendingFixes[$gn] = @{ fix_url = $fu; zipPath = $zipPath; dlJob = $dlJob }
                                 }
                             }
@@ -1515,7 +1515,7 @@ $script:steamWatchTimer.Add_Tick({
                         $fn, $fu = Find-FixForGame $gn $fixes
                         if (-not $fu) { $script:knownDownloading[$appid] = $true; continue }
                         $zipPath = Join-Path $env:TEMP "predl_$(Get-Random).zip"
-                        $dlJob = Start-Job -ScriptBlock { param($u, $o) try { $page = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop; $dl = $page.Links | Where-Object { $_.id -eq "downloadButton" } | Select-Object -ExpandProperty href; if (-not $dl) { throw "No download link" }; (New-Object System.Net.WebClient).DownloadFile($dl, $o) } catch {} } -ArgumentList $fu, $zipPath
+                        $dlJob = Start-Job -ScriptBlock { param($u, $o) try { (New-Object System.Net.WebClient).DownloadFile($u, $o) } catch {} } -ArgumentList $fu, $zipPath
                         $script:downloadPendingFixes[$gn] = @{ fix_url = $fu; zipPath = $zipPath; dlJob = $dlJob }
                         $script:knownDownloading[$appid] = $true
                     }
@@ -1553,10 +1553,8 @@ $script:steamWatchTimer.Add_Tick({
             if ($fu) {
                 $zip = Join-Path $env:TEMP "newfix_$(Get-Random).zip"
                 $job = Start-Job -ScriptBlock {
-                    param($u, $o, $p) try { $page = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop
-                    $dl = $page.Links | Where-Object { $_.id -eq "downloadButton" } | Select-Object -ExpandProperty href
-                    if (-not $dl) { throw "No download link" }
-                    (New-Object System.Net.WebClient).DownloadFile($dl, $o)
+                    param($u, $o, $p) try {
+                    (New-Object System.Net.WebClient).DownloadFile($u, $o)
                     Expand-Archive -Path $o -DestinationPath $p -Force -ErrorAction Stop
                     $er = @()
                     try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; $z = [System.IO.Compression.ZipFile]::OpenRead($o); foreach ($e in $z.Entries) { if ($e.Name) { $er += $e.FullName } }; $z.Dispose() } catch {}
