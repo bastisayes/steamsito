@@ -557,11 +557,6 @@ function Add-FixManifestEntry {
 function Activar-Directo {
     try {
         $steamRoot = Get-SteamPath
-        if (-not (Add-DefenderExclusion $steamRoot)) {
-            $resp2 = [System.Windows.Forms.MessageBox]::Show("Debes aceptar UAC para excluir Steam del antivirus.`nContinuar de todas formas?", "Antivirus", "YesNo", "Warning")
-            if ($resp2 -eq "No") { throw "Operacion cancelada por el usuario." }
-        }
-        Add-DefenderExclusion $env:TEMP
         Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
         $zip = Join-Path $steamRoot "st_patch_$(Get-Random).zip"
         Download-MediaFire "https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip" $zip
@@ -1134,13 +1129,13 @@ $script:mp.Controls.Add($script:c3)
 $script:c4=New-Card -X ($PAD+$HW+$GAP) -Y $R2Y -W $HW -H $CH -Title (T "desinstalar") -Sub (T "desinstalarSub") -Icon "trash" -Click {
     $timers = Get-ActiveTimers
     if ($timers.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("No hay codigos activos para desinstalar.",(T "desinstalar"),"OK","Information"); return }
-    if ([System.Windows.Forms.MessageBox]::Show("Se eliminaran TODOS los fixes activos.`nContinuar?",(T "desinstalar"),"YesNo","Warning") -ne "Yes") { return }
+    if ([System.Windows.Forms.MessageBox]::Show("Se eliminaran TODOS los juegos activos.`nContinuar?",(T "desinstalar"),"YesNo","Warning") -ne "Yes") { return }
     $errors=0
     foreach ($t in $timers) {
         try { $root=$t.steam_root; foreach ($f in $t.lua_files) { Remove-FileHard (Join-Path (Join-Path $root "config\stplug-in") $f); Remove-FileHard (Join-Path (Join-Path $root "config\lua") $f) }; foreach ($f in $t.manifest_files) { Remove-FileHard (Join-Path (Join-Path $root "config\depotcache") $f) } } catch { $errors++ }
     }
     Save-Timers @(); Sync-ActiveCodesFromTimers
-    [System.Windows.Forms.MessageBox]::Show("Fixes eliminados correctamente.","Listo","OK","Information")
+    [System.Windows.Forms.MessageBox]::Show("Juegos eliminados correctamente.","Listo","OK","Information")
 }
 $script:mp.Controls.Add($script:c4)
 
@@ -1298,7 +1293,7 @@ $script:subB.Add_Click({
             if ($duration -gt 0 -and $expDate) { Start-Countdown $duration $expDate ($links[0]) }
             $script:rp.Invalidate(); Refresh-Codes
             [System.Windows.Forms.MessageBox]::Show("$successCount de $total juegos activados correctamente.","Listo","OK","Information")
-        } else { throw "No se pudo aplicar ningun fix.`n$($errors -join '; ')" }
+        } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
     } catch {
         Write-ErrorLog "Canjeo" $_; $lblR.ForeColor=$script:Red
         $lblR.Text="Error: $($_.Exception.Message)"
