@@ -247,7 +247,7 @@ try {
 function Download-MediaFire {
     param([string]$url, [string]$outFile, $progressBar = $null, [int]$progressStart = 0, [int]$progressEnd = 100)
     $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    if ($url -match "github\.com.*/raw/") {
+    if ($url -match "github\.com.*/raw/|githubusercontent\.com") {
         $dlUrl = $url; $cc = $null
     } else {
         $pageReq = [System.Net.HttpWebRequest]::Create($url)
