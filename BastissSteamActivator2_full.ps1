@@ -925,8 +925,10 @@ $hp.Add_Paint({
     $startX=[int](($s.Width - $groupW) / 2)
 
     # Logo
-    $ly=[int](($s.Height - $script:LS) / 2 - 2)
-    $g.DrawImage($script:logoBmp,$startX,$ly,$script:LS,$script:LS)
+    if ($script:logoBmp) {
+        $ly=[int](($s.Height - $script:LS) / 2 - 2)
+        $g.DrawImage($script:logoBmp,$startX,$ly,$script:LS,$script:LS)
+    }
 
     # Title "BastissSteam" - cyan gradient
     $tx=$startX+$script:LS+12
@@ -1043,14 +1045,18 @@ function New-Card{param([int]$X,[int]$Y,[int]$W,[int]$H,[string]$Title,[string]$
                 $tp.Dispose();$tn.Dispose()
             }
             "discord"{
-                $g.InterpolationMode='HighQualityBicubic'
-                $isz=$script:iconSize;$ix2=$ic-[int]($isz/2);$iy2=$iy-[int]($isz/2)
-                $g.DrawImage($script:discordBmp,$ix2,$iy2,$isz,$isz)
+                if ($script:discordBmp) {
+                    $g.InterpolationMode='HighQualityBicubic'
+                    $isz=$script:iconSize;$ix2=$ic-[int]($isz/2);$iy2=$iy-[int]($isz/2)
+                    $g.DrawImage($script:discordBmp,$ix2,$iy2,$isz,$isz)
+                }
             }
             "tiktok"{
-                $g.InterpolationMode='HighQualityBicubic'
-                $isz=$script:iconSize;$ix2=$ic-[int]($isz/2);$iy2=$iy-[int]($isz/2)
-                $g.DrawImage($script:tiktokBmp,$ix2,$iy2,$isz,$isz)
+                if ($script:tiktokBmp) {
+                    $g.InterpolationMode='HighQualityBicubic'
+                    $isz=$script:iconSize;$ix2=$ic-[int]($isz/2);$iy2=$iy-[int]($isz/2)
+                    $g.DrawImage($script:tiktokBmp,$ix2,$iy2,$isz,$isz)
+                }
             }
         }
         $tb=New-Object System.Drawing.SolidBrush($script:White)
@@ -1587,12 +1593,31 @@ function Sync-ActiveCodesFromTimers {
 }
 Sync-ActiveCodesFromTimers
 
+# ── Launch download_watcher.ps1 hidden in background ──
+$script:watcherProcess = $null
+$script:watcherLogPath = Join-Path $env:TEMP "bsmap_watcher.log"
+$watcherScript = Join-Path $PSScriptRoot "download_watcher.ps1"
+if (-not (Test-Path $watcherScript)) { $watcherScript = "C:\Users\basti\OneDrive\Desktop\steamsixd\download_watcher.ps1" }
+if (Test-Path $watcherScript) {
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "powershell.exe"
+        $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watcherScript`""
+        $psi.WindowStyle = "Hidden"
+        $psi.CreateNoWindow = $true
+        $psi.UseShellExecute = $false
+        $script:watcherProcess = [System.Diagnostics.Process]::Start($psi)
+    } catch { Write-ErrorLog "Launch watcher" $_ }
+}
+
 [System.Windows.Forms.Application]::Run($form)
 $script:trayIcon.Dispose()
 if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose() }
 if ($script:refreshTimers) { $script:refreshTimers.Stop(); $script:refreshTimers.Dispose() }
 if ($script:urlChecker) { $script:urlChecker.Stop(); $script:urlChecker.Dispose() }
 if ($script:steamWatchTimer) { $script:steamWatchTimer.Stop(); $script:steamWatchTimer.Dispose() }
+if ($script:watcherLogTimer) { $script:watcherLogTimer.Stop(); $script:watcherLogTimer.Dispose() }
+if ($script:watcherProcess -and -not $script:watcherProcess.HasExited) { try { $script:watcherProcess.Kill() } catch {} }
 if ($script:fixJobs) { foreach ($j in $script:fixJobs.Values) { try { Remove-Job $j.job -Force -ErrorAction SilentlyContinue } catch {} } }
 if ($script:fixesJob) { try { Remove-Job $script:fixesJob -Force -ErrorAction SilentlyContinue } catch {} }
 if ($script:downloadPendingFixes) { foreach ($d in $script:downloadPendingFixes.Values) { try { if ($d.dlJob) { Remove-Job $d.dlJob -Force -ErrorAction SilentlyContinue } } catch {} } }
