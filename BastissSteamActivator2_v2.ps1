@@ -1,4 +1,4 @@
-<#
+﻿<#
     BastissSteam Activator v2.0
     PowerShell 5.1 WinForms GUI
 #>
@@ -694,7 +694,7 @@ $script:langs = @{
         idioma="Idioma";idiomaSub="Cambiar idioma";desinstalar="Desinstalar";desinstalarSub="Eliminar juegos"
         discord="Discord";discordSub="Unite a nuestro servidor";tiktok="TikTok";tiktokSub="Seguinos en TikTok"
         salir="Salir";canjear="Canjear Codigo";canjearSub="Ingresa tu codigo para desbloquear juegos"
-        canjearBtn="Canjear";volver="Volver";codigosActivos="Codigos Activos"
+        canjearBtn="Canjear";pegarBtn="Pegar";volver="Volver";codigosActivos="Codigos Activos"
         sinCodigos="No hay codigos activos";sinCodigosSub="Ingresa un codigo arriba para activar juegos"
         errorCodigo="Ingresa un codigo valido.";verificando="Verificando codigo..."
         exito="Codigo canjeado exitosamente!";expirado="EXPIRADO";activo="ACTIVO"
@@ -704,7 +704,7 @@ $script:langs = @{
         idioma="Language";idiomaSub="Change language";desinstalar="Uninstall";desinstalarSub="Remove games"
         discord="Discord";discordSub="Join our server";tiktok="TikTok";tiktokSub="Follow us on TikTok"
         salir="Exit";canjear="Redeem Code";canjearSub="Enter your code to unlock games"
-        canjearBtn="Redeem";volver="Back";codigosActivos="Active Codes"
+        canjearBtn="Redeem";pegarBtn="Paste";volver="Back";codigosActivos="Active Codes"
         sinCodigos="No active codes";sinCodigosSub="Enter a code above to activate games"
         errorCodigo="Enter a valid code.";verificando="Verifying code..."
         exito="Code redeemed successfully!";expirado="EXPIRED";activo="ACTIVE"
@@ -714,7 +714,7 @@ $script:langs = @{
         idioma="Idioma";idiomaSub="Mudar idioma";desinstalar="Desinstalar";desinstalarSub="Remover jogos"
         discord="Discord";discordSub="Entre no nosso servidor";tiktok="TikTok";tiktokSub="Siga-nos no TikTok"
         salir="Sair";canjear="Resgatar Codigo";canjearSub="Insira seu codigo para desbloquear jogos"
-        canjearBtn="Resgatar";volver="Voltar";codigosActivos="Codigos Ativos"
+        canjearBtn="Resgatar";pegarBtn="Colar";volver="Voltar";codigosActivos="Codigos Ativos"
         sinCodigos="Nenhum codigo ativo";sinCodigosSub="Insira um codigo acima para ativar jogos"
         errorCodigo="Insira um codigo valido.";verificando="Verificando codigo..."
         exito="Codigo resgatado com sucesso!";expirado="EXPIRADO";activo="ATIVO"
@@ -736,6 +736,8 @@ $script:White=[System.Drawing.Color]::White
 $script:Gray=[System.Drawing.Color]::FromArgb(130,142,162)
 $script:Green=[System.Drawing.Color]::FromArgb(60,220,100)
 $script:Cyan=[System.Drawing.Color]::FromArgb(0,180,230)
+$script:PegarBtnBG=[System.Drawing.Color]::FromArgb(30,40,58)
+$script:PegarBtnBGH=[System.Drawing.Color]::FromArgb(40,55,78)
 $script:Yellow=[System.Drawing.Color]::FromArgb(255,210,0)
 $script:Orange=[System.Drawing.Color]::FromArgb(255,160,40)
 $script:Red=[System.Drawing.Color]::FromArgb(255,70,70)
@@ -1226,13 +1228,38 @@ $script:rSubL.Font=$FntSub;$script:rSubL.ForeColor=$Gray;$script:rSubL.BackColor
 $script:rSubL.Location=New-Object System.Drawing.Point($PAD,52)
 $script:rp.Controls.Add($script:rSubL)
 
-# Input + submit
+# Input + paste + submit
 $txtC=New-Object System.Windows.Forms.TextBox
 $txtC.Location=New-Object System.Drawing.Point($PAD,76)
-$txtC.Size=New-Object System.Drawing.Size(([int]$CW-105),26)
+$txtC.Size=New-Object System.Drawing.Size(([int]$CW-160),26)
 $txtC.Font=New-Object System.Drawing.Font("Consolas",11)
 $txtC.BackColor=$InputBG;$txtC.ForeColor=$White;$txtC.BorderStyle="FixedSingle";$txtC.MaxLength=50
 $script:rp.Controls.Add($txtC)
+
+# Paste button (pega del portapapeles)
+$script:pasteB=New-Object BufferedPanel
+$script:pasteB.Location=New-Object System.Drawing.Point(([int]$PAD+[int]$CW-154),74)
+$script:pasteB.Size=New-Object System.Drawing.Size(50,28);$script:pasteB.BackColor=$BG
+$script:pasteB.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:pasteB.Tag=@{Hover=$false}
+$script:pasteB.Add_MouseEnter({param($s);$s.Tag.Hover=$true;$s.Invalidate()})
+$script:pasteB.Add_MouseLeave({param($s);$s.Tag.Hover=$false;$s.Invalidate()})
+$script:pasteB.Add_Paint({param($s,$e)
+    $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+    $bc=if($s.Tag.Hover){$script:PegarBtnBGH}else{$script:PegarBtnBG}
+    $p=New-RR 0 0 ($s.Width-1) ($s.Height-1) 7
+    $b1=New-Object System.Drawing.SolidBrush($bc);$bp=New-Object System.Drawing.Pen($script:Cyan,1)
+    $g.FillPath($b1,$p);$g.DrawPath($bp,$p);$b1.Dispose();$bp.Dispose();$p.Dispose()
+    $sz=$g.MeasureString((T "pegarBtn"),$script:FntSubmit)
+    $tb=New-Object System.Drawing.SolidBrush($script:Cyan)
+    $g.DrawString((T "pegarBtn"),$script:FntSubmit,$tb,($s.Width-$sz.Width)/2,($s.Height-$sz.Height)/2);$tb.Dispose()
+})
+$script:pasteB.Add_Click({
+    try {
+        $clip = [System.Windows.Forms.Clipboard]::GetText()
+        if ($clip) { $txtC.Text = $clip.Trim(); $txtC.Focus(); $txtC.Select($txtC.Text.Length,0) }
+    } catch { [System.Windows.Forms.MessageBox]::Show("No se pudo acceder al portapapeles.","Error","OK","Warning") | Out-Null }
+})
+$script:rp.Controls.Add($script:pasteB)
 
 $script:subB=New-Object BufferedPanel
 $script:subB.Location=New-Object System.Drawing.Point(([int]$PAD+[int]$CW-98),74)
@@ -1347,11 +1374,14 @@ $script:clp.Add_Paint({param($s,$e)
         $isPermanent = $c.Duration -eq 0
         if($isPermanent){$st="Permanente";$sc=$script:Green}
         else{
-            $now=Get-Date;$exp=$c.ExpiresAt;$dl=[int]([math]::Ceiling(($exp-$now).TotalDays))
-            if($dl -le 0){$st=T "expirado";$sc=$script:Red}
-            elseif($dl -le 3){$st="$(T 'expiraEn') $dl $(if($dl-ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
-            elseif($dl -le 7){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
-            else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+            $now=Get-Date;$exp=$c.ExpiresAt
+            if($exp){
+                $dl=[int]([math]::Ceiling(($exp-$now).TotalDays))
+                if($dl -le 0){$st=T "expirado";$sc=$script:Red}
+                elseif($dl -le 3){$st="$(T 'expiraEn') $dl $(if($dl-ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
+                elseif($dl -le 7){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
+                else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+            } else {$st=T "activo";$sc=$script:Green}
         }
         $p2=New-RR 0 $yP ($s.Width-1) $ch2 8
         $bg3=New-Object System.Drawing.SolidBrush($script:CardBG);$bp2=New-Object System.Drawing.Pen($script:CardBorder,1)
@@ -1359,7 +1389,8 @@ $script:clp.Add_Paint({param($s,$e)
         $dtBr=New-Object System.Drawing.SolidBrush($sc);$g.FillEllipse($dtBr,12,($yP+12),8,8);$dtBr.Dispose()
         $ctb=New-Object System.Drawing.SolidBrush($script:White);$g.DrawString($c.Code,$script:FntCodeT,$ctb,28,($yP+8));$ctb.Dispose()
         $gtb=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString($c.Game,$script:FntCodeS,$gtb,28,($yP+26));$gtb.Dispose()
-        $etb=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString("$(T 'expira') $($exp.ToString('dd/MM/yyyy'))",$script:FntCodeS,$etb,28,($yP+40));$etb.Dispose()
+        $expStr = if($c.ExpiresAt){$c.ExpiresAt.ToString('dd/MM/yyyy')}else{'--/--/----'}
+        $etb=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString("$(T 'expira') $expStr",$script:FntCodeS,$etb,28,($yP+40));$etb.Dispose()
         $stb=New-Object System.Drawing.SolidBrush($sc);$stsz=$g.MeasureString($st,$script:FntCodeSt)
         $g.DrawString($st,$script:FntCodeSt,$stb,($s.Width-$stsz.Width-12),($yP+10));$stb.Dispose()
         $yP+=$ch2+$gp2
