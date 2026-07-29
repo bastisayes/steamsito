@@ -253,9 +253,9 @@ function Remove-ExpiredTimers {
 }
 
 # ---- Server URL (auto-fetch from GitHub API first = instant, raw fallback) ----
-$script:serverUrl = "https://e614319245875bd9-45-224-188-19.serveousercontent.com"
+$script:serverUrl = "https://localhost:9876"
 $script:ghApiUrlBase = "https://api.github.com/repos/bastisayes/Fixes-steam/contents/current_url.txt"
-$script:ghUrlBase = "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/original_blue.ps1"
+$script:ghRawUrl = "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/current_url.txt"
 function Update-ServerUrl {
     try {
         $apiResult = Invoke-RestMethod -Uri $script:ghApiUrlBase -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue
@@ -268,12 +268,10 @@ function Update-ServerUrl {
         }
     } catch {}
     try {
-        $rawContent = Invoke-RestMethod -Uri "$script:ghUrlBase?r=$(Get-Random)" -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue
-        if ($rawContent -match '\$script:serverUrl\s*=\s*"(https?://[^"]+)"') {
-            $newUrl = $matches[1]
-            if ($newUrl -ne "https://EJEMPLO.lhr.life" -and $newUrl -ne $script:serverUrl) {
-                $script:serverUrl = $newUrl
-            }
+        $rawUrl = Invoke-RestMethod -Uri "$script:ghRawUrl?v=$(Get-Random)" -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue
+        $rawUrl = $rawUrl.Trim()
+        if ($rawUrl -match "^https?://" -and $rawUrl -ne $script:serverUrl) {
+            $script:serverUrl = $rawUrl
         }
     } catch {}
 }
@@ -287,11 +285,9 @@ try {
     } else { throw "API no response" }
 } catch {
     try {
-        $rawContent = Invoke-RestMethod -Uri "$script:ghUrlBase?r=$(Get-Random)" -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
-        if ($rawContent -match '\$script:serverUrl\s*=\s*"(https?://[^"]+)"') {
-            $fetchedUrl = $matches[1]
-            if ($fetchedUrl -ne "https://EJEMPLO.lhr.life") { $script:serverUrl = $fetchedUrl }
-        }
+        $rawUrl = Invoke-RestMethod -Uri "$script:ghRawUrl?v=$(Get-Random)" -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
+        $rawUrl = $rawUrl.Trim()
+        if ($rawUrl -match "^https?://") { $script:serverUrl = $rawUrl }
     } catch {}
 }
 
