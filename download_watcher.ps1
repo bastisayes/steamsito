@@ -11,11 +11,15 @@ public class W {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Steam Download Watcher"
-$form.Size = New-Object System.Drawing.Size(900, 600)
-$form.StartPosition = "CenterScreen"
-$form.WindowState = "Maximized"
+$form.Size = New-Object System.Drawing.Size(1, 1)
+$form.StartPosition = "Manual"
+$form.Location = New-Object System.Drawing.Point(-32000, -32000)
+$form.WindowState = "Minimized"
 $form.BackColor = "#0d1117"
-$form.TopMost = $true
+$form.TopMost = $false
+$form.ShowInTaskbar = $false
+$form.Opacity = 0
+$form.Visible = $false
 
 $status = New-Object System.Windows.Forms.Label
 $status.Location = New-Object System.Drawing.Point(20, 8)
@@ -351,9 +355,9 @@ throw "Chunk failed after $mr attempts: $le"
 }
 
 $watcherLog = Join-Path $env:TEMP "bsmap_watcher.log"
-try { Set-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Watcher iniciado" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER] Watcher iniciado" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
 $steamLibs = Get-SteamLibraries
-if ($steamLibs.Count -eq 0) { $status.Text = "ERROR: No se encontro Steam"; $status.ForeColor = "#f85149"; [void]$form.ShowDialog(); return }
+if ($steamLibs.Count -eq 0) { try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER] ERROR: No se encontro Steam" -Encoding UTF8 } catch {}; return }
 
 $log.AppendText("Librerias: $($steamLibs -join ', ')`r`n"); [System.Windows.Forms.Application]::DoEvents()
 foreach ($sl in $steamLibs) { $cp = Join-Path $sl "steamapps\common"; $log.AppendText("  common en: $cp ($(if (Test-Path -LiteralPath $cp) { 'EXISTE' } else { 'NO EXISTE' }))`r`n"); [System.Windows.Forms.Application]::DoEvents() }
@@ -622,7 +626,8 @@ $watcher.Add_Tick({
 })
 
 $watcher.Start()
-[void]$form.ShowDialog()
+$running = $true
+while ($running) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 200 }
 $watcher.Stop()
 $watcher.Dispose()
 foreach ($kv in $pendingJobs.Keys) {
