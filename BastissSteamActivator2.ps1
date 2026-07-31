@@ -1499,27 +1499,66 @@ $cBadge.AutoSize=$true;$cBadge.Location=New-Object System.Drawing.Point(170,144)
 $script:rp.Controls.Add($cBadge)
 
 $clH=($FH-$CY)-170
+$script:clpScroll=0;$script:clpMaxScroll=0;$script:clpContentH=0;$script:clpDragging=$false;$script:clpGrabY=0
+function Get-ClpThumb {
+    $cw=$script:clp.ClientSize.Width;$chh=$script:clp.ClientSize.Height
+    $sbw=4;$pad=3;$tx=($cw - $sbw - $pad)
+    $th=[Math]::Max(24,[int](($chh * $chh) / [Math]::Max(1,$script:clpContentH)))
+    $ty=0;if($script:clpMaxScroll -gt 0){$ty=[int](($chh - $th) * ($script:clpScroll / $script:clpMaxScroll))}
+    return @{X=$tx;Y=$ty;W=$sbw;H=$th}
+}
 $script:clp=New-Object BufferedPanel
 $script:clp.Location=New-Object System.Drawing.Point($PAD,164)
 $script:clp.Size=New-Object System.Drawing.Size($CW,$clH);$script:clp.BackColor=$BG
-$script:clp.AutoScroll=$true
-$script:clp.AutoScrollMargin=New-Object System.Drawing.Size(0,0)
+$script:clp.Add_MouseWheel({
+    param($s,$e)
+    if($script:clpMaxScroll -gt 0){
+        $step=[int](($e.Delta / 120) * 50)
+        $script:clpScroll=[Math]::Max(0,[Math]::Min($script:clpMaxScroll,($script:clpScroll - $step)))
+        $s.Invalidate();$e.Handled=$true
+    }
+})
+$script:clp.Add_MouseDown({
+    param($s,$e)
+    if($script:clpMaxScroll -gt 0 -and $e.Button -eq 'Left'){
+        $t=Get-ClpThumb
+        if($e.X -ge $t.X -and $e.X -le ($t.X + $t.W) -and $e.Y -ge $t.Y -and $e.Y -le ($t.Y + $t.H)){
+            $script:clpDragging=$true;$script:clpGrabY=($e.Y - $t.Y);$s.Capture=$true;$s.Invalidate()
+        }
+    }
+})
+$script:clp.Add_MouseMove({
+    param($s,$e)
+    if($script:clpDragging -and $script:clpMaxScroll -gt 0){
+        $t=Get-ClpThumb
+        $maxTy=($s.ClientSize.Height - $t.H)
+        if($maxTy -gt 0){
+            $newTy=($e.Y - $script:clpGrabY)
+            $script:clpScroll=[int]($script:clpMaxScroll * ([Math]::Max(0,[Math]::Min($maxTy,$newTy)) / $maxTy))
+            $s.Invalidate()
+        }
+    }
+})
+$script:clp.Add_MouseUp({param($s,$e);if($script:clpDragging){$script:clpDragging=$false;$s.Capture=$false;$s.Invalidate()}})
 $script:clp.Add_Paint({param($s,$e)
     $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
-    $g.TranslateTransform($s.AutoScrollPosition.X,$s.AutoScrollPosition.Y)
+    $script:clpMaxScroll=[Math]::Max(0,($script:clpContentH - $s.ClientSize.Height))
+    if($script:clpScroll -gt $script:clpMaxScroll){$script:clpScroll=$script:clpMaxScroll}
+    if($script:clpScroll -lt 0){$script:clpScroll=0}
+    $g.TranslateTransform(0,-$script:clpScroll)
     $codes=$script:activeCodes;$cBadge.Text="($($codes.Count))"
     if($codes.Count -eq 0){
-        $script:clp.AutoScrollMinSize=New-Object System.Drawing.Size(0,0)
+        $script:clpContentH=60;$script:clpMaxScroll=0;$script:clpScroll=0;$g.ResetTransform()
         $p=New-RR 0 0 ($s.ClientSize.Width-1) 60 8
         $bg2=New-Object System.Drawing.SolidBrush($script:CardBG);$bp=New-Object System.Drawing.Pen($script:CardBorder,1)
         $g.FillPath($bg2,$p);$g.DrawPath($bp,$p);$bg2.Dispose();$bp.Dispose();$p.Dispose()
         $gb2=New-Object System.Drawing.SolidBrush($script:Gray)
         $f1=New-Object System.Drawing.Font("Bahnschrift",9.5)
         $msg=T "sinCodigos";$msz=$g.MeasureString($msg,$f1)
-        $g.DrawString($msg,$f1,$gb2,($s.Width-$msz.Width)/2,12)
+        $g.DrawString($msg,$f1,$gb2,($s.ClientSize.Width - $msz.Width)/2,12)
         $f2=New-Object System.Drawing.Font("Segoe UI",8)
         $msg2=T "sinCodigosSub";$msz2=$g.MeasureString($msg2,$f2)
-        $g.DrawString($msg2,$f2,$gb2,($s.Width-$msz2.Width)/2,33)
+        $g.DrawString($msg2,$f2,$gb2,($s.ClientSize.Width - $msz2.Width)/2,33)
         $gb2.Dispose();$f1.Dispose();$f2.Dispose();return
     }
     $ch2=66;$gp2=6;$yP=0
@@ -1539,7 +1578,7 @@ $script:clp.Add_Paint({param($s,$e)
                 elseif($dl -le 7){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
                 else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
                 # Formato fecha con dia de semana + hora:minuto: "Lun 15/08/2025 18:30"
-                $diasEsp = @('Dom','Lun','Mar','MiÃƒÂ©','Jue','Vie','SÃƒÂ¡b')
+                                $diasEsp = @('Dom','Lun','Mar','MiÃƒÂ©','Jue','Vie','SÃƒÂ¡b')
                 $diaSem = $diasEsp[$exp.DayOfWeek.value__]
                 $expStr = "$diaSem $($exp.ToString('dd/MM/yyyy HH:mm'))"
             } else {$st=T "activo";$sc=$script:Green; $expStr = "--/--/----"}
@@ -1547,20 +1586,48 @@ $script:clp.Add_Paint({param($s,$e)
         $p2=New-RR 0 $yP ($s.ClientSize.Width-1) $ch2 8
         $bg3=New-Object System.Drawing.SolidBrush($script:CardBG);$bp2=New-Object System.Drawing.Pen($script:CardBorder,1)
         $g.FillPath($bg3,$p2);$g.DrawPath($bp2,$p2);$bg3.Dispose();$bp2.Dispose();$p2.Dispose()
-        $dtBr=New-Object System.Drawing.SolidBrush($sc);$g.FillEllipse($dtBr,12,($yP+12),8,8);$dtBr.Dispose()
-        $ctb=New-Object System.Drawing.SolidBrush($script:White);$g.DrawString($c.Code,$script:FntCodeT,$ctb,28,($yP+6));$ctb.Dispose()
-        $gtb=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString($c.Game,$script:FntCodeS,$gtb,28,($yP+22));$gtb.Dispose()
+        $hlp=New-Object System.Drawing.Pen($script:CardHover,1)
+        $g.DrawLine($hlp,10,($yP+1),($s.ClientSize.Width-12),($yP+1));$hlp.Dispose()
+        $dtBr=New-Object System.Drawing.SolidBrush($sc);$g.FillEllipse($dtBr,14,($yP+13),8,8);$dtBr.Dispose()
+        $ctb=New-Object System.Drawing.SolidBrush($script:White);$g.DrawString($c.Code,$script:FntCodeT,$ctb,30,($yP+8));$ctb.Dispose()
+        $gtb=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString($c.Game,$script:FntCodeS,$gtb,30,($yP+24));$gtb.Dispose()
         $etb=New-Object System.Drawing.SolidBrush($script:Gray)
-        # Mostrar texto "Expira:" + fecha con dia/hora/minuto
-        $g.DrawString("Expira: $expStr",$script:FntCodeS,$etb,28,($yP+38));$etb.Dispose()
+        $g.DrawString("Expira: $expStr",$script:FntCodeS,$etb,30,($yP+40));$etb.Dispose()
         $stb=New-Object System.Drawing.SolidBrush($sc);$stsz=$g.MeasureString($st,$script:FntCodeSt)
-        $g.DrawString($st,$script:FntCodeSt,$stb,($s.ClientSize.Width-$stsz.Width-12),($yP+8));$stb.Dispose()
-        $yP+=$ch2+$gp2
+        $pillW=[int]$stsz.Width + 16;$pillX=($s.ClientSize.Width - $pillW - 10);$pillH=20
+        $pillR=New-RR $pillX ($yP+4) $pillW $pillH 10
+        $pillBr=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(45,$sc.R,$sc.G,$sc.B))
+        $g.FillPath($pillBr,$pillR);$pillBr.Dispose();$pillR.Dispose()
+        $g.DrawString($st,$script:FntCodeSt,$stb,($pillX + 8),($yP + 6));$stb.Dispose()
+        $yP=($yP + $ch2 + $gp2)
     }
-    $script:clp.AutoScrollMinSize=New-Object System.Drawing.Size(0,$yP)
+    $script:clpContentH=$yP
+    $script:clpMaxScroll=[Math]::Max(0,($script:clpContentH - $s.ClientSize.Height))
+    if($script:clpScroll -gt $script:clpMaxScroll){$script:clpScroll=$script:clpMaxScroll}
+    $g.ResetTransform()
+    if($script:clpMaxScroll -gt 0){
+        $t=Get-ClpThumb
+        $tr=New-RR $t.X 0 $t.W $s.ClientSize.Height 4
+        $trBr=New-Object System.Drawing.SolidBrush($script:CardBorder)
+        $g.FillPath($trBr,$tr);$trBr.Dispose();$tr.Dispose()
+        $thumbBrush=New-Object System.Drawing.SolidBrush($script:Cyan)
+        $thr=New-RR $t.X $t.Y $t.W $t.H 4
+        $g.FillPath($thumbBrush,$thr);$thumbBrush.Dispose();$thr.Dispose()
+    }
 })
 $script:rp.Controls.Add($script:clp)
 $form.Controls.Add($script:rp)
+$form.Add_MouseWheel({
+    param($s,$e)
+    if($script:rp.Visible -and $script:clpMaxScroll -gt 0){
+        $pt=$script:rp.PointToClient([System.Windows.Forms.Cursor]::Position)
+        if($pt.Y -ge 0 -and $pt.Y -le $script:rp.Height){
+            $step=[int](($e.Delta / 120) * 50)
+            $script:clpScroll=[Math]::Max(0,[Math]::Min($script:clpMaxScroll,($script:clpScroll - $step)))
+            $script:clp.Invalidate();$e.Handled=$true
+        }
+    }
+})
 
 # â”€â”€ CONFIG VIEW â”€â”€
 $script:sp=New-Object BufferedPanel
