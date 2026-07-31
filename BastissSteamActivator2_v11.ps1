@@ -1383,7 +1383,24 @@ $script:subB.Add_Click({
                 Update-ServerUrl
                 Start-Sleep -Milliseconds 300
                 if ($script:serverUrl -match "localhost|127\.0\.0\.1") { Update-ServerUrl; Start-Sleep -Milliseconds 500 }
-                $resp = Invoke-RestMethod -Uri "$($script:serverUrl)/api/redeem-code" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 20 -ErrorAction Stop
+                $reqUrl = "$($script:serverUrl)/api/redeem-code"
+                $req = [System.Net.HttpWebRequest]::Create($reqUrl)
+                $req.Method = "POST"
+                $req.ContentType = "application/json"
+                $req.Timeout = 30000
+                $req.ReadWriteTimeout = 30000
+                $req.KeepAlive = $false
+                $req.ServicePoint.Expect100Continue = $false
+                $reqData = [System.Text.Encoding]::UTF8.GetBytes($body)
+                $req.ContentLength = $reqData.Length
+                $reqStream = $req.GetRequestStream()
+                $reqStream.Write($reqData, 0, $reqData.Length)
+                $reqStream.Close()
+                $webResp = $req.GetResponse()
+                $sr = New-Object System.IO.StreamReader($webResp.GetResponseStream(), [System.Text.Encoding]::UTF8)
+                $respRaw = $sr.ReadToEnd()
+                $sr.Close(); $webResp.Close()
+                $resp = $respRaw | ConvertFrom-Json
                 $lastErr = $null
                 break
             } catch { $lastErr = $_; Start-Sleep -Seconds 1 }
