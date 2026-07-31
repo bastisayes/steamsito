@@ -1,4 +1,4 @@
-﻿<#
+<#
     BastissSteam Activator v2.0
     PowerShell 5.1 WinForms GUI
 #>
@@ -165,8 +165,7 @@ function Get-ActiveTimers {
     if (Test-Path $TIMERS_FILE) {
         try {
             $data = Get-Content $TIMERS_FILE -Raw | ConvertFrom-Json
-            $arr = @()
-            if ($data -is [array]) { $arr = $data } else { $arr = @($data) }
+            $arr = @(foreach ($el in @($data)) { if ($el -is [System.Array] -and $el.Count -eq 1) { $el[0] } else { $el } })
             # Filtrar elementos corruptos (que no tienen expires_at o que tienen value/Count)
             $valid = @()
             foreach ($item in $arr) {
@@ -181,12 +180,14 @@ function Get-ActiveTimers {
 function Save-Timers {
     param($t)
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    try { (Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue).Attributes = 'Normal' } catch {}
     if (-not $t -or $t.Count -eq 0) {
         [System.IO.File]::WriteAllText($TIMERS_FILE, '[]', $utf8NoBom)
         try { Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value '[]' -Type String -Force -ErrorAction SilentlyContinue } catch {}
     } else {
-        [System.IO.File]::WriteAllText($TIMERS_FILE, ($t | ConvertTo-Json -Depth 10), $utf8NoBom)
-        try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value ($t | ConvertTo-Json -Compress -Depth 10) -Type String -Force -ErrorAction SilentlyContinue } catch {}
+        $t = @(foreach ($el in @($t)) { if ($el -is [System.Array] -and $el.Count -eq 1) { $el[0] } else { $el } })
+        [System.IO.File]::WriteAllText($TIMERS_FILE, (ConvertTo-Json -InputObject @($t) -Depth 10), $utf8NoBom)
+        try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value (ConvertTo-Json -InputObject @($t) -Compress -Depth 10) -Type String -Force -ErrorAction SilentlyContinue } catch {}
     }
     try { $fi = Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue; if ($fi) { $fi.Attributes = 'Hidden, System' } } catch {}
 }
