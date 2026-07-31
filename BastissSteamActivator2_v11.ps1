@@ -287,20 +287,33 @@ function Update-ServerUrl {
         }
     } catch {}
 }
-# Initial fetch on startup (API first = instant, raw fallback)
-try {
-    $apiResult = Invoke-RestMethod -Uri $script:ghApiUrlBase -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
-    if ($apiResult -and $apiResult.content) {
-        $txtUrl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($apiResult.content))
-        $txtUrl = $txtUrl.Trim()
-        if ($txtUrl -match "^https?://") { $script:serverUrl = $txtUrl }
-    } else { throw "API no response" }
-} catch {
+# Initial fetch on startup: BLOQUEAR hasta obtener URL real de GitHub (no usar localhost)
+$initFetched = $false
+for ($i = 0; $i -lt 10 -and -not $initFetched; $i++) {
     try {
-        $rawUrl = Invoke-RestMethod -Uri "$script:ghRawUrl?v=$(Get-Random)" -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
-        $rawUrl = $rawUrl.Trim()
-        if ($rawUrl -match "^https?://") { $script:serverUrl = $rawUrl }
+        $apiResult = Invoke-RestMethod -Uri $script:ghApiUrlBase -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+        if ($apiResult -and $apiResult.content) {
+            $txtUrl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($apiResult.content))
+            $txtUrl = $txtUrl.Trim()
+            if ($txtUrl -match "^https://" -and $txtUrl -notmatch "localhost") {
+                $script:serverUrl = $txtUrl
+                $initFetched = $true
+            }
+        }
     } catch {}
+    if (-not $initFetched) {
+        try {
+            $tempRaw = Join-Path $env:TEMP "bsmap_init_url.txt"
+            & curl.exe -s --max-time 8 "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/current_url.txt?v=$([DateTime]::Now.Ticks)" -o $tempRaw 2>&1 | Out-Null
+            $rawUrl = ([System.IO.File]::ReadAllText($tempRaw, [System.Text.Encoding]::ASCII)).Trim()
+            Remove-Item $tempRaw -Force -ErrorAction SilentlyContinue
+            if ($rawUrl -match "^https://" -and $rawUrl -notmatch "localhost") {
+                $script:serverUrl = $rawUrl
+                $initFetched = $true
+            }
+        } catch {}
+    }
+    if (-not $initFetched) { Start-Sleep -Seconds 2 }
 }
 
 # ---- MediaFire Download (segmented) ----
