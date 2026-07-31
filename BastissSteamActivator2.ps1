@@ -132,33 +132,67 @@ function Add-DefenderExclusion {
 
 # ---- Internet Time + Timer System ----
 $TIMERS_FILE = Join-Path $env:LOCALAPPDATA "bsmap_timers.json"
+$OFFSET_FILE = Join-Path $env:LOCALAPPDATA "bsmap_offset.json"
 $script:internetTimeCache = $null
 $script:internetTimeCacheTime = (Get-Date).AddDays(-1)
+$script:utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
+# Hora de internet robusta: worldtimeapi -> timeapi.io. Cache 60s para no saturar.
 function Get-InternetTime {
     $nowLocal = Get-Date
     if (($nowLocal - $script:internetTimeCacheTime).TotalSeconds -le 60 -and $script:internetTimeCache) {
-        return $script:internetTimeCache
+        return $script:internetTimeCache, $true
     }
+    $ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    $override = $env:BSMAP_TIMEAPI_URL
     try {
-        $r = Invoke-RestMethod "https://worldtimeapi.org/api/ip" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-        $t = [datetime]::ParseExact($r.utc_datetime.Substring(0, 19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime()
+        if ($override) { $r = Invoke-RestMethod $override -Headers @{ 'User-Agent' = $ua } -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop; $t = [datetime]::ParseExact($r.dateTime.Substring(0,19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime() }
+        else {
+            try { $r = Invoke-RestMethod 'https://worldtimeapi.org/api/ip' -Headers @{ 'User-Agent' = $ua } -UseBasicParsing -TimeoutSec 4 -ErrorAction Stop; $t = [datetime]::ParseExact($r.utc_datetime.Substring(0,19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime() }
+            catch { $r = Invoke-RestMethod 'https://timeapi.io/api/Time/current/zone?timeZone=UTC' -Headers @{ 'User-Agent' = $ua } -UseBasicParsing -TimeoutSec 4 -ErrorAction Stop; $t = [datetime]::ParseExact($r.dateTime.Substring(0,19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime() }
+        }
         $script:internetTimeCache = $t; $script:internetTimeCacheTime = $nowLocal
-        return $t
-    } catch {
-        try {
-            $r = Invoke-RestMethod "https://timeapi.io/api/Time/current/zone?timeZone=UTC" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-            $t = [datetime]::ParseExact($r.dateTime.Substring(0, 19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime()
-            $script:internetTimeCache = $t; $script:internetTimeCacheTime = $nowLocal
-            return $t
-        } catch { return $null }
-    }
+        return $t, $true
+    } catch { return $null, $false }
 }
 
+function Read-NetOffset {
+    try {
+        if (Test-Path $OFFSET_FILE) {
+            $o = Get-Content $OFFSET_FILE -Raw | ConvertFrom-Json
+            if ($o.offset_seconds) { return [double]$o.offset_seconds }
+        }
+    } catch {}
+    return $null
+}
+$script:clockOffsetSec = if ((Read-NetOffset)) { [double](Read-NetOffset) } else { 0 }
+
+function Save-NetOffset {
+    param([double]$sec)
+    try { [System.IO.File]::WriteAllText($OFFSET_FILE, (@{ offset_seconds = [math]::Round($sec,1); measured_at = (Get-Date).ToString('o') } | ConvertTo-Json), $script:utf8NoBom) } catch {}
+}
+
+# Retorna ($now, $isNet). Coherente con cleanup.ps1. Sin internet usa offset persistente.
 function Get-Now {
-    $net = Get-InternetTime
-    if ($net) { return $net, $true }
+    $net, $ok = Get-InternetTime
+    if ($net) {
+        $off = ((Get-Date) - $net).TotalSeconds
+        if ([math]::Abs($off) -gt 1) { Save-NetOffset $off }
+        $script:clockOffsetSec = $off
+        return $net, $true
+    }
+    $off = Read-NetOffset
+    $script:clockOffsetSec = if ($off) { $off } else { 0 }
+    if ($off) { return (Get-Date).AddSeconds(-$off), $false }
     return (Get-Date), $false
+}
+
+# Convierte una fecha real (internet) a zona del reloj local para display coherente
+function ConvertTo-ClockTime {
+    param([datetime]$dt)
+    if (-not $dt) { return $dt }
+    $off = if ($script:clockOffsetSec) { $script:clockOffsetSec } else { 0 }
+    return $dt.AddSeconds($off)
 }
 
 function Get-ActiveTimers {
@@ -211,11 +245,6 @@ function Remove-ExpiredTimers {
     $timers = Get-ActiveTimers; $remaining = @()
     $expired = @()
     $now, $isNet = Get-Now
-    if (-not $isNet -and $timers.Count -gt 0) {
-        $earliest = $timers | ForEach-Object { $_.internet_created_at } | Where-Object { $_ } | Sort-Object | Select-Object -First 1
-        if ($earliest) { $ec = $earliest -as [datetime]; if ($ec -and $ec -gt (Get-Date)) { $now = $ec.AddDays(365) } }
-    }
-    # Si no hay tiempo de internet y la cache retorno null, usar hora local
     if (-not $now) { $now = Get-Date; $isNet = $false }
     foreach ($t in $timers) {
         $exp = $t.expires_at -as [datetime]; if (-not $exp) { $remaining += $t; continue }
@@ -1413,7 +1442,8 @@ $script:subB.Add_Click({
     $lblR.ForeColor=$script:Yellow;$lblR.Text="Conectando con servidor..."
     [System.Windows.Forms.Application]::DoEvents()
     try {
-        $body = @{code=$code;client_id=$script:clientId} | ConvertTo-Json
+        $redeemNow, $_ = Get-Now
+        $body = @{code=$code;client_id=$script:clientId;redeem_at=$redeemNow.ToString("o")} | ConvertTo-Json
         $lastErr = $null
         for ($attempt = 0; $attempt -lt 3; $attempt++) {
             try {
@@ -1458,10 +1488,12 @@ $script:subB.Add_Click({
                 # Always save to timers file (permanent = expires in 1 year)
                 $timerExp = if ($expDate) { $expDate } else { $baseNow.AddYears(1) }
                 $timers = Get-ActiveTimers
-                $internetNow = Get-InternetTime
-                $timers += @{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
+                $internetNow, $netOk = Get-InternetTime
+                if (-not $internetNow) { $internetNow = $baseNow }
+                $iNow = $internetNow.ToString("o")
+                $timers += @{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$iNow;game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
                 Save-Timers $timers
-                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration})|Out-Null
+                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration;InternetCreatedAt=$iNow})|Out-Null
                 $successCount++
             } catch { $errors+="$gameName : $($_.Exception.Message)"; Write-ErrorLog "Download $gameName" $_ }
             Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
@@ -1575,6 +1607,8 @@ $script:clp.Add_Paint({param($s,$e)
         $g.DrawString($msg2,$f2,$gb2,($s.ClientSize.Width - $msz2.Width)/2,33)
         $gb2.Dispose();$f1.Dispose();$f2.Dispose();return
     }
+    # Ordenar por ActivatedAt descendente (recien canjeados arriba)
+    $codes = @($script:activeCodes | Sort-Object -Property ActivatedAt -Descending)
     $ch2=86;$gp2=6;$yP=0
     foreach($c in $codes){
         $isPermanent = $c.Duration -eq 0
@@ -1586,15 +1620,19 @@ $script:clp.Add_Paint({param($s,$e)
                 $dl=[int]([math]::Ceiling($timeLeft.TotalDays))
                 $hoursLeft=[int]([math]::Floor($timeLeft.TotalHours))
                 if($exp -le $now){$st=T "expirado";$sc=$script:Red}
-                elseif($hoursLeft -le 3){$st="Expira en ${hoursLeft}h";$sc=$script:Red}
-                elseif($dl -le 1){$st="Expira hoy";$sc=$script:Orange}
-                elseif($dl -le 3){$st="$(T 'expiraEn') $dl $(if($dl-ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
-                elseif($dl -le 7){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
-                else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+                else{
+                    $pct = 1.0
+                    if ($c.Duration -and $c.Duration -gt 0) { $pct = $timeLeft.TotalSeconds / [double]$c.Duration }
+                    if ($pct -le 0.10){$st="Expira en ${hoursLeft}h";$sc=$script:Red}
+                    elseif ($pct -le 0.25){$st="$(T 'expiraEn') $dl $(if($dl -ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
+                    elseif ($pct -le 0.50){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
+                    else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+                }
                 # Formato fecha con dia de semana + hora:minuto: "Lun 15/08/2025 18:30"
-                                $diasEsp = @('Dom','Lun','Mar','MiÃƒÂ©','Jue','Vie','SÃƒÂ¡b')
-                $diaSem = $diasEsp[$exp.DayOfWeek.value__]
-                $expStr = "$diaSem $($exp.ToString('dd/MM/yyyy HH:mm'))"
+                                $diasEsp = @('Dom','Lun','Mar','MiÃƒÂƒÃ‚Â©','Jue','Vie','SÃƒÂƒÃ‚Â¡b')
+                $expDisp = ConvertTo-ClockTime $exp
+                $diaSem = $diasEsp[$expDisp.DayOfWeek.value__]
+                $expStr = "$diaSem $($expDisp.ToString('dd/MM/yyyy HH:mm'))"
             } else {$st=T "activo";$sc=$script:Green; $expStr = "--/--/----"}
         }
         $cdStr=""
@@ -2122,7 +2160,9 @@ function Sync-ActiveCodesFromTimers {
         if ($memGameNames -contains $t.game_name) { continue }
         $c = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }
         $d = if ($t.PSObject.Properties.Name -contains 'duration') { $t.duration } else { $null }
-        $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=(Get-Date);ExpiresAt=$exp;Duration=$d})|Out-Null
+        $iCreated = $t.internet_created_at
+        $aAt = if ($iCreated) { [datetime]$iCreated } else { (Get-Date) }
+        $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=$aAt;ExpiresAt=$exp;Duration=$d;InternetCreatedAt=$iCreated})|Out-Null
     }
 }
 Sync-ActiveCodesFromTimers
