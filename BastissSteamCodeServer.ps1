@@ -52,10 +52,6 @@ input,textarea,select{width:100%;padding:11px 14px;background:#0a0e14;border:1px
 .msg.success{display:block;background:#1b2d1b;border:1px solid #00ff88;color:#00ff88}
 .section-title{color:#00d4ff;font-size:16px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #252c36}
 .codes-grid{display:grid;gap:10px}
-#codesList{max-height:60vh;overflow-y:auto;overflow-x:hidden;padding-right:8px;scrollbar-width:thin;scrollbar-color:#00d4ff #0a0e14}
-#codesList::-webkit-scrollbar{width:10px}
-#codesList::-webkit-scrollbar-track{background:#0a0e14}
-#codesList::-webkit-scrollbar-thumb{background:#00d4ff55;border-radius:5px}
 .code-card{background:#0a0e14;border:1px solid #252c36;border-radius:8px;padding:14px 18px}
 .code-card .code{color:#00d4ff;font-family:Consolas,monospace;font-size:15px;font-weight:700}
 .code-card .meta{color:#6a737d;font-size:12px;margin-top:5px}
@@ -130,7 +126,7 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <div class="section-title">Codigos existentes</div>
 <div id="codesList"><p style="color:#6a737d;text-align:center;padding:20px">Cargando...</p></div>
 </div>
-<div class="footer">BastissSteam Code Server &bull; cloudflared Tunnel &bull; <span id="status">Conectado</span></div>
+<div class="footer">Servidor PowerShell &bull; localhost.run Tunnel &bull; <span id="status">Conectado</span></div>
 </div>
 <script>
 function calcDur(){const d=+document.getElementById('durD').value||0,h=+document.getElementById('durH').value||0,m=+document.getElementById('durM').value||0,s=+document.getElementById('durS').value||0;const t=d*86400+h*3600+m*60+s;document.getElementById('duration').value=t;const e=document.getElementById('durTotal');e.textContent=t?t+'s':'Perm'}
