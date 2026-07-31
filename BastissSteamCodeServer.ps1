@@ -1,4 +1,4 @@
-param([int]$Port = 9876)
+﻿param([int]$Port = 9876)
 $ErrorActionPreference = "Continue"
 $srvPort = $Port
 $startLog = Join-Path $env:LOCALAPPDATA "BastissSteam\server_start.log"
@@ -258,6 +258,7 @@ function Monitor-Url {
         $matches = [regex]::Matches($out, 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
         if ($matches.Count -gt 0) {
             $newUrl = $matches[$matches.Count - 1].Value
+            $script:lastUrlSeen = [datetime]::UtcNow
             if ($newUrl -ne $script:pubUrl) {
                 $script:pubUrl = $newUrl
                 Set-Content $script:urlCache $newUrl -Force -ErrorAction SilentlyContinue
@@ -279,6 +280,7 @@ function Push-UrlToGitHub {
 }
 $lastUrlCheck = [datetime]::MinValue
 $lastGhPush = [datetime]::MinValue
+$script:lastUrlSeen = [datetime]::UtcNow
 while ($true) {
     if (-not $tcpListener.Server.Poll(500000, [System.Net.Sockets.SelectMode]::SelectRead)) {
         # Monitor URL from SSH log every 500ms
@@ -289,17 +291,16 @@ while ($true) {
             $lastGhPush = $now
             if ($script:pubUrl -match "^https://") { Push-UrlToGitHub $script:pubUrl }
         }
-        # Check cloudflared zombie every 15 seconds
-        if (($now - $script:lastCfStart).TotalSeconds -gt 15) {
-            $cfAlive = $false
-            $cfProcs = Get-Process cloudflared -ErrorAction SilentlyContinue
-            if ($cfProcs) {
-                foreach ($cp in $cfProcs) {
-                    try { $conns = Get-NetTCPConnection -OwningProcess $cp.Id -ErrorAction Stop } catch { $conns = @() }
-                    if ($conns | Where-Object { $_.State -eq "Established" }) { $cfAlive = $true; break }
-                }
+        # Check cloudflared zombie every 30 seconds: solo reiniciar si el proceso no existe
+        # o si no publico una URL en los ultimos 3 minutos (Get-NetTCPConnection puede dar falsos negativos)
+        if (($now - $script:lastCfStart).TotalSeconds -gt 30) {
+            $cfProcs = @(Get-Process cloudflared -ErrorAction SilentlyContinue)
+            $lastUrl = if ($script:lastUrlPushed) { $script:lastUrlPushed } else { $script:pubUrl }
+            $urlAge = if ($lastUrl) { ($now - $script:lastUrlSeen).TotalSeconds } else { 9999 }
+            if ($cfProcs.Count -eq 0 -or $urlAge -gt 180) {
+                try { & taskkill /F /T /IM cloudflared.exe 2>&1 | Out-Null } catch {}
+                Start-Tunnel
             }
-            if (-not $cfAlive) { try { & taskkill /F /T /IM cloudflared.exe 2>&1 | Out-Null } catch {}; Start-Tunnel }
         }
         continue
     }
