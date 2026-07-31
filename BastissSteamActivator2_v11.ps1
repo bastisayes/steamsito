@@ -1394,28 +1394,8 @@ $script:subB.Add_Click({
                 Update-ServerUrl
                 Start-Sleep -Milliseconds 300
                 if ($script:serverUrl -match "localhost|127\.0\.0\.1") { Update-ServerUrl; Start-Sleep -Milliseconds 500 }
-                $reqUrl = "$($script:serverUrl)/api/redeem-code"
                 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-                $req = [System.Net.HttpWebRequest]::Create($reqUrl)
-                $req.Method = "POST"
-                $req.ContentType = "application/json"
-                $req.UserAgent = "BastissActivator/2.0"
-                $req.Timeout = 30000
-                $req.ReadWriteTimeout = 30000
-                $req.KeepAlive = $false
-                $req.ProtocolVersion = [System.Net.HttpVersion]::Version11
-                $req.ServicePoint.Expect100Continue = $false
-                $req.ServicePoint.UseNagleAlgorithm = $false
-                $reqData = [System.Text.Encoding]::UTF8.GetBytes($body)
-                $req.ContentLength = $reqData.Length
-                $reqStream = $req.GetRequestStream()
-                $reqStream.Write($reqData, 0, $reqData.Length)
-                $reqStream.Close()
-                $webResp = $req.GetResponse()
-                $sr = New-Object System.IO.StreamReader($webResp.GetResponseStream(), [System.Text.Encoding]::UTF8)
-                $respRaw = $sr.ReadToEnd()
-                $sr.Close(); $webResp.Close()
-                $resp = $respRaw | ConvertFrom-Json
+                $resp = Invoke-RestMethod -Uri "$($script:serverUrl)/api/redeem-code" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30 -ErrorAction Stop
                 $lastErr = $null
                 break
             } catch { $lastErr = $_; Start-Sleep -Seconds 1 }
