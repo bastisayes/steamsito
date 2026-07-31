@@ -1661,24 +1661,8 @@ $script:sp.Controls.Add($script:sHist)
 
 # LIMPIEZA TOTAL: kill all processes + remove ALL luas + clear registry - EXHAUSTIVO
 $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
-    if ([System.Windows.Forms.MessageBox]::Show("LIMPIEZA TOTAL`n`n-Se detendran TODOS los procesos (watcher, ssh, jobs)`n-Se detendran los timers que borran juegos`n-Se eliminaran TODOS los archivos .lua, .manifest en TODAS las librerias de Steam`n-Se borrara el registro de codigos`n`nContinuar?","LIMPIEZA","YesNo","Warning") -ne "Yes") { return }
-    # 0. DETENER TIMERS QUE BORRAN JUEGOS PRIMERO (antes de borrar luas)
-    try { if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose(); $script:countdownTick = $null } } catch {}
-    try { if ($script:refreshTimers) { $script:refreshTimers.Stop(); $script:refreshTimers.Dispose(); $script:refreshTimers = $null } } catch {}
-    # 1. Matar proceso del watcher
-    if ($script:watcherProcess -and -not $script:watcherProcess.HasExited) { try { $script:watcherProcess.Kill(); $script:watcherProcess.WaitForExit(3000) } catch {} }
-    $script:watcherProcess = $null; $script:watcherEnabled = $false
-    # 2. Matar procesos del watcher que hayan quedado huerfanos (por nombre de script)
-    try {
-        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "bsmap_watcher" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
-        # Matar tambien cualquier proceso ssh asociado a serveo
-        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "serveo" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
-    } catch {}
-    # 3. Cancelar todos los jobs pendientes
-    if ($script:fixJobs) { foreach ($j in $script:fixJobs.Values) { try { if ($j.job) { Stop-Job $j.job -ErrorAction SilentlyContinue; Remove-Job $j.job -Force -ErrorAction SilentlyContinue } } catch {} } }
-    try { if ($script:fixesJob) { Stop-Job $script:fixesJob -ErrorAction SilentlyContinue; Remove-Job $script:fixesJob -Force -ErrorAction SilentlyContinue } } catch {}
-    if ($script:downloadPendingFixes) { foreach ($d in $script:downloadPendingFixes.Values) { try { if ($d.dlJob) { Stop-Job $d.dlJob -ErrorAction SilentlyContinue; Remove-Job $d.dlJob -Force -ErrorAction SilentlyContinue } } catch {} } }
-    # 4. Borrar gua archivos .lua, .manifest, .cache en TODAS las librerias de Steam
+    if ([System.Windows.Forms.MessageBox]::Show("LIMPIEZA TOTAL`n`n-Se eliminaran TODOS los archivos .lua, .manifest en TODAS las librerias de Steam`n-Se detendran TODOS los procesos (watcher, ssh, jobs)`n-Se detendran los timers que borran juegos`n-Se borrara el registro de codigos`n`nContinuar?","LIMPIEZA","YesNo","Warning") -ne "Yes") { return }
+    # 1. BORRAR ARCHIVOS .lua, .manifest, .cache PRIMERO (antes de detener timers)
     $steamRoot = Get-SteamPath
     $allLibs = @($steamRoot)
     try { $allLibs = Get-SteamLibraries } catch {}
@@ -1706,17 +1690,33 @@ $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
             }
         }
     }
-    # 5. Limpiar timers + registro
+    # 2. DETENER TIMERS QUE BORRAN JUEGOS (despues de borrar luas)
+    try { if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose(); $script:countdownTick = $null } } catch {}
+    try { if ($script:refreshTimers) { $script:refreshTimers.Stop(); $script:refreshTimers.Dispose(); $script:refreshTimers = $null } } catch {}
+    # 3. Matar proceso del watcher
+    if ($script:watcherProcess -and -not $script:watcherProcess.HasExited) { try { $script:watcherProcess.Kill(); $script:watcherProcess.WaitForExit(3000) } catch {} }
+    $script:watcherProcess = $null; $script:watcherEnabled = $false
+    # 4. Matar procesos del watcher que hayan quedado huerfanos (por nombre de script)
+    try {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "bsmap_watcher" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+        # Matar tambien cualquier proceso ssh asociado a serveo
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "serveo" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+    } catch {}
+    # 5. Cancelar todos los jobs pendientes
+    if ($script:fixJobs) { foreach ($j in $script:fixJobs.Values) { try { if ($j.job) { Stop-Job $j.job -ErrorAction SilentlyContinue; Remove-Job $j.job -Force -ErrorAction SilentlyContinue } } catch {} } }
+    try { if ($script:fixesJob) { Stop-Job $script:fixesJob -ErrorAction SilentlyContinue; Remove-Job $script:fixesJob -Force -ErrorAction SilentlyContinue } } catch {}
+    if ($script:downloadPendingFixes) { foreach ($d in $script:downloadPendingFixes.Values) { try { if ($d.dlJob) { Stop-Job $d.dlJob -ErrorAction SilentlyContinue; Remove-Job $d.dlJob -Force -ErrorAction SilentlyContinue } } catch {} } }
+    # 6. Limpiar timers + registro
     Save-Timers @()
     $script:activeCodes.Clear()
     try { Remove-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Force -ErrorAction SilentlyContinue } catch {}
-    # 6. Doble verificacion de timers
+    # 7. Doble verificacion de timers
     $remaining = Get-ActiveTimers
     if ($remaining.Count -gt 0) { Save-Timers @(); $script:activeCodes.Clear() }
-    # 7. Refrescar UI
+    # 8. Refrescar UI
     Sync-ActiveCodesFromTimers; Refresh-Codes; $script:rp.Invalidate(); $script:sWatcher.Invalidate()
     [System.Windows.Forms.Application]::DoEvents()
-    [System.Windows.Forms.MessageBox]::Show("Limpieza completada.`n- Timers de borrado detenidos`n- $totalRemoved archivos eliminados`n- Procesos detenidos`n- Registro borrado","LIMPIEZA COMPLETADA","OK","Information")
+    [System.Windows.Forms.MessageBox]::Show("Limpieza completada.`n- $totalRemoved archivos eliminados`n- Timers de borrado detenidos`n- Procesos detenidos`n- Registro borrado","LIMPIEZA COMPLETADA","OK","Information")
 }
 $script:sp.Controls.Add($script:sKill)
 
