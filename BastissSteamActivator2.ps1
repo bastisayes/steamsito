@@ -734,7 +734,7 @@ function Start-Countdown {
     $script:countdownTick.Interval = 1000
     $script:countdownTick.Tag = @{ endTime = $expDate; gameName = $gameName }
     $script:countdownTick.Add_Tick({
-        $now = Get-Date; $end = $this.Tag.endTime; $g = $this.Tag.gameName
+        $now, $_ = Get-Now; $end = $this.Tag.endTime; $g = $this.Tag.gameName
         $left = ($end - $now).TotalSeconds
         if ($left -le 0) {
             $this.Stop()
@@ -1438,7 +1438,8 @@ $script:subB.Add_Click({
         $links = @($resp.links); $duration = [int]$resp.duration
         if ($links.Count -eq 0) { throw "El codigo no contiene links." }
         Send-Webhook $code ($links -join "`n")
-        $expDate = if ($duration -gt 0) { (Get-Date).AddSeconds($duration) } else { $null }
+        $baseNow, $baseIsNet = Get-Now
+        $expDate = if ($duration -gt 0) { $baseNow.AddSeconds($duration) } else { $null }
         $steamRoot = Get-SteamPath
         $successCount=0; $total=$links.Count; $errors=@()
         foreach ($mfUrl in $links) {
@@ -1450,12 +1451,12 @@ $script:subB.Add_Click({
                 Download-MediaFire $mfUrl $zipFile
                 $installResult = Extract-AndInstall $zipFile $gameName $expDate
                 # Always save to timers file (permanent = expires in 1 year)
-                $timerExp = if ($expDate) { $expDate } else { (Get-Date).AddYears(1) }
+                $timerExp = if ($expDate) { $expDate } else { $baseNow.AddYears(1) }
                 $timers = Get-ActiveTimers
                 $internetNow = Get-InternetTime
                 $timers += @{redeem_code=$code;duration=$duration;expires_at=$timerExp.ToString("o");internet_created_at=$(if($internetNow){$internetNow.ToString("o")}else{$null});game_name=$gameName;steam_root=$steamRoot;lua_files=@($installResult.lua);manifest_files=@($installResult.manifest)}
                 Save-Timers $timers
-                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=(Get-Date);ExpiresAt=$(if($expDate){$expDate}else{(Get-Date).AddYears(1)});Duration=$duration})|Out-Null
+                $script:activeCodes.Add(@{Code=$code;Game=$gameName;ActivatedAt=$baseNow;ExpiresAt=$(if($expDate){$expDate}else{$baseNow.AddYears(1)});Duration=$duration})|Out-Null
                 $successCount++
             } catch { $errors+="$gameName : $($_.Exception.Message)"; Write-ErrorLog "Download $gameName" $_ }
             Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
@@ -1574,7 +1575,7 @@ $script:clp.Add_Paint({param($s,$e)
         $isPermanent = $c.Duration -eq 0
         if($isPermanent){$st="Permanente";$sc=$script:Green; $expStr = "Permanente"}
         else{
-            $now=Get-Date;$exp=$c.ExpiresAt
+            $now, $_ = Get-Now; $exp = $c.ExpiresAt
             if($exp){
                 $timeLeft = $exp - $now
                 $dl=[int]([math]::Ceiling($timeLeft.TotalDays))
@@ -1594,7 +1595,7 @@ $script:clp.Add_Paint({param($s,$e)
         $cdStr=""
         $cdCol=$script:Green
         if($c.ExpiresAt){
-            $tl2=($c.ExpiresAt - (Get-Date))
+            $tl2=($c.ExpiresAt - $now)
             if($tl2.TotalSeconds -le 0){$cdStr=(T "expirado");$cdCol=$script:Red}
             elseif($tl2.TotalDays -ge 1){$cdStr="Faltan $([int]$tl2.TotalDays)d $($tl2.Hours)h $($tl2.Minutes)m";$cdCol=$script:Yellow}
             elseif($tl2.TotalHours -ge 1){$cdStr="Faltan $([int]$tl2.TotalHours)h $($tl2.Minutes)m $($tl2.Seconds)s";$cdCol=$script:Orange}
