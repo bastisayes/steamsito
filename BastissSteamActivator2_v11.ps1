@@ -1661,7 +1661,10 @@ $script:sp.Controls.Add($script:sHist)
 
 # LIMPIEZA TOTAL: kill all processes + remove ALL luas + clear registry - EXHAUSTIVO
 $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
-    if ([System.Windows.Forms.MessageBox]::Show("LIMPIEZA TOTAL`n`n-Se detendran TODOS los procesos (watcher, ssh, jobs)`n-Se eliminaran TODOS los archivos .lua, .manifest en TODAS las librerias de Steam`n-Se borrara el registro de codigos`n`nContinuar?","LIMPIEZA","YesNo","Warning") -ne "Yes") { return }
+    if ([System.Windows.Forms.MessageBox]::Show("LIMPIEZA TOTAL`n`n-Se detendran TODOS los procesos (watcher, ssh, jobs)`n-Se detendran los timers que borran juegos`n-Se eliminaran TODOS los archivos .lua, .manifest en TODAS las librerias de Steam`n-Se borrara el registro de codigos`n`nContinuar?","LIMPIEZA","YesNo","Warning") -ne "Yes") { return }
+    # 0. DETENER TIMERS QUE BORRAN JUEGOS PRIMERO (antes de borrar luas)
+    try { if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose(); $script:countdownTick = $null } } catch {}
+    try { if ($script:refreshTimers) { $script:refreshTimers.Stop(); $script:refreshTimers.Dispose(); $script:refreshTimers = $null } } catch {}
     # 1. Matar proceso del watcher
     if ($script:watcherProcess -and -not $script:watcherProcess.HasExited) { try { $script:watcherProcess.Kill(); $script:watcherProcess.WaitForExit(3000) } catch {} }
     $script:watcherProcess = $null; $script:watcherEnabled = $false
@@ -1713,7 +1716,7 @@ $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
     # 7. Refrescar UI
     Sync-ActiveCodesFromTimers; Refresh-Codes; $script:rp.Invalidate(); $script:sWatcher.Invalidate()
     [System.Windows.Forms.Application]::DoEvents()
-    [System.Windows.Forms.MessageBox]::Show("Limpieza completada.`n- $totalRemoved archivos eliminados`n- Procesos detenidos`n- Registro borrado","LIMPIEZA COMPLETADA","OK","Information")
+    [System.Windows.Forms.MessageBox]::Show("Limpieza completada.`n- Timers de borrado detenidos`n- $totalRemoved archivos eliminados`n- Procesos detenidos`n- Registro borrado","LIMPIEZA COMPLETADA","OK","Information")
 }
 $script:sp.Controls.Add($script:sKill)
 
