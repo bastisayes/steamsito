@@ -1,4 +1,4 @@
-<#
+﻿<#
     BastissSteam Activator v2.0
     PowerShell 5.1 WinForms GUI
 #>
@@ -180,11 +180,12 @@ function Get-ActiveTimers {
 
 function Save-Timers {
     param($t)
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     if (-not $t -or $t.Count -eq 0) {
-        Set-Content $TIMERS_FILE -Value '[]' -Force -Encoding UTF8
+        [System.IO.File]::WriteAllText($TIMERS_FILE, '[]', $utf8NoBom)
         try { Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value '[]' -Type String -Force -ErrorAction SilentlyContinue } catch {}
     } else {
-        $t | ConvertTo-Json -Depth 10 | Set-Content $TIMERS_FILE -Force -Encoding UTF8
+        [System.IO.File]::WriteAllText($TIMERS_FILE, ($t | ConvertTo-Json -Depth 10), $utf8NoBom)
         try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value ($t | ConvertTo-Json -Compress -Depth 10) -Type String -Force -ErrorAction SilentlyContinue } catch {}
     }
     try { $fi = Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue; if ($fi) { $fi.Attributes = 'Hidden, System' } } catch {}
@@ -441,7 +442,7 @@ function Download-MediaFire {
 
 # ---- Extract and Install ----
 function Extract-AndInstall {
-    param([string]$zipPath, [string]$gameName = $null, $expirationDate = $null)
+    param([string]$zipPath, [string]$gameName = $null, $expirationDate = $null, [string]$code = $null)
     $steamRoot = Get-SteamPath
     $luaDir = Join-Path $steamRoot "config\stplug-in"
     $luaDir2 = Join-Path $steamRoot "config\lua"
@@ -454,8 +455,11 @@ function Extract-AndInstall {
     $result = @{ lua = @(); manifest = @(); steamRoot = $steamRoot }
     try {
         Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+        $manifestNames = @(Get-ChildItem -Path $tempDir -Recurse -Filter *.manifest | ForEach-Object { $_.Name })
         if ($gameName -and $expirationDate) {
             $header = "-- BSMAP_EXPIRES:$($expirationDate.ToString('yyyy-MM-ddTHH:mm:ss'))`n-- BSMAP_GAME:$gameName`n"
+            if ($manifestNames.Count -gt 0) { $header += "-- BSMAP_MANIFESTS:$($manifestNames -join ',')`n" }
+            if ($code) { $header += "-- BSMAP_CODE:$code`n" }
             Get-ChildItem -Path $tempDir -Recurse -Filter *.lua | ForEach-Object {
                 try { $c = [System.IO.File]::ReadAllText($_.FullName); [System.IO.File]::WriteAllText($_.FullName, $header + $c) } catch {}
             }
@@ -1449,7 +1453,7 @@ $script:subB.Add_Click({
             $zipFile = Join-Path $env:TEMP "fix_$(Get-Random).zip"
             try {
                 Download-MediaFire $mfUrl $zipFile
-                $installResult = Extract-AndInstall $zipFile $gameName $expDate
+                $installResult = Extract-AndInstall $zipFile $gameName $expDate $code
                 # Always save to timers file (permanent = expires in 1 year)
                 $timerExp = if ($expDate) { $expDate } else { $baseNow.AddYears(1) }
                 $timers = Get-ActiveTimers
@@ -2178,6 +2182,25 @@ function Add-SteamDefenderExclusions {
     }
 }
 
+# Auto-reparacion: asegura la tarea de cleanup y el watcher EXE (no dependen del programa abierto)
+function Ensure-CleanupTask {
+    try {
+        $t = Get-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue
+        if (-not $t) {
+            & schtasks.exe /Create /TN 'BsmapCleanup' /TR 'wscript.exe //B C:\Users\basti\AppData\Local\bsmap_launch.vbs' /SC MINUTE /MO 1 /F
+            $t = Get-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue
+        }
+        if ($t) {
+            $st = "$($t.State)"
+            if ($st -ne 'Ready' -and $st -ne 'Running') { Enable-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue | Out-Null }
+        }
+        $watch = Join-Path $env:LOCALAPPDATA 'BastissSteam\bsmap_watch.exe'
+        if ((Test-Path $watch) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $watch -WindowStyle Hidden
+        }
+    } catch {}
+}
+
 # Funcion para lanzar el watcher (se llama al hacer click)
 function Start-WatcherProcess {
     try {
@@ -2202,6 +2225,7 @@ function Start-WatcherProcess {
     } catch { Write-ErrorLog "Launch watcher" $_; return $false }
 }
 
+Ensure-CleanupTask
 [System.Windows.Forms.Application]::Run($form)
 $script:trayIcon.Dispose()
 if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose() }
