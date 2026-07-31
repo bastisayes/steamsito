@@ -1502,11 +1502,15 @@ $clH=($FH-$CY)-170
 $script:clp=New-Object BufferedPanel
 $script:clp.Location=New-Object System.Drawing.Point($PAD,164)
 $script:clp.Size=New-Object System.Drawing.Size($CW,$clH);$script:clp.BackColor=$BG
+$script:clp.AutoScroll=$true
+$script:clp.AutoScrollMargin=New-Object System.Drawing.Size(0,0)
 $script:clp.Add_Paint({param($s,$e)
     $g=$e.Graphics;$g.SmoothingMode='AntiAlias';$g.TextRenderingHint='ClearTypeGridFit'
+    $g.TranslateTransform($s.AutoScrollPosition.X,$s.AutoScrollPosition.Y)
     $codes=$script:activeCodes;$cBadge.Text="($($codes.Count))"
     if($codes.Count -eq 0){
-        $p=New-RR 0 0 ($s.Width-1) 60 8
+        $script:clp.AutoScrollMinSize=New-Object System.Drawing.Size(0,0)
+        $p=New-RR 0 0 ($s.ClientSize.Width-1) 60 8
         $bg2=New-Object System.Drawing.SolidBrush($script:CardBG);$bp=New-Object System.Drawing.Pen($script:CardBorder,1)
         $g.FillPath($bg2,$p);$g.DrawPath($bp,$p);$bg2.Dispose();$bp.Dispose();$p.Dispose()
         $gb2=New-Object System.Drawing.SolidBrush($script:Gray)
@@ -1540,7 +1544,7 @@ $script:clp.Add_Paint({param($s,$e)
                 $expStr = "$diaSem $($exp.ToString('dd/MM/yyyy HH:mm'))"
             } else {$st=T "activo";$sc=$script:Green; $expStr = "--/--/----"}
         }
-        $p2=New-RR 0 $yP ($s.Width-1) $ch2 8
+        $p2=New-RR 0 $yP ($s.ClientSize.Width-1) $ch2 8
         $bg3=New-Object System.Drawing.SolidBrush($script:CardBG);$bp2=New-Object System.Drawing.Pen($script:CardBorder,1)
         $g.FillPath($bg3,$p2);$g.DrawPath($bp2,$p2);$bg3.Dispose();$bp2.Dispose();$p2.Dispose()
         $dtBr=New-Object System.Drawing.SolidBrush($sc);$g.FillEllipse($dtBr,12,($yP+12),8,8);$dtBr.Dispose()
@@ -1550,9 +1554,10 @@ $script:clp.Add_Paint({param($s,$e)
         # Mostrar texto "Expira:" + fecha con dia/hora/minuto
         $g.DrawString("Expira: $expStr",$script:FntCodeS,$etb,28,($yP+38));$etb.Dispose()
         $stb=New-Object System.Drawing.SolidBrush($sc);$stsz=$g.MeasureString($st,$script:FntCodeSt)
-        $g.DrawString($st,$script:FntCodeSt,$stb,($s.Width-$stsz.Width-12),($yP+8));$stb.Dispose()
+        $g.DrawString($st,$script:FntCodeSt,$stb,($s.ClientSize.Width-$stsz.Width-12),($yP+8));$stb.Dispose()
         $yP+=$ch2+$gp2
     }
+    $script:clp.AutoScrollMinSize=New-Object System.Drawing.Size(0,$yP)
 })
 $script:rp.Controls.Add($script:clp)
 $form.Controls.Add($script:rp)
