@@ -1395,7 +1395,11 @@ $script:subB.Add_Click({
                 Start-Sleep -Milliseconds 300
                 if ($script:serverUrl -match "localhost|127\.0\.0\.1") { Update-ServerUrl; Start-Sleep -Milliseconds 500 }
                 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-                $resp = Invoke-RestMethod -Uri "$($script:serverUrl)/api/redeem-code" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30 -ErrorAction Stop
+                $wc = New-Object System.Net.WebClient
+                $wc.Headers.Add("Content-Type", "application/json")
+                $wc.Headers.Add("User-Agent", "BastissActivator/2.0")
+                $respRaw = $wc.UploadString("$($script:serverUrl)/api/redeem-code", "POST", $body)
+                $resp = $respRaw | ConvertFrom-Json
                 $lastErr = $null
                 break
             } catch { $lastErr = $_; Start-Sleep -Seconds 1 }
