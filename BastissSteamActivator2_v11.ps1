@@ -1394,12 +1394,17 @@ $script:subB.Add_Click({
                 Update-ServerUrl
                 Start-Sleep -Milliseconds 300
                 if ($script:serverUrl -match "localhost|127\.0\.0\.1") { Update-ServerUrl; Start-Sleep -Milliseconds 500 }
-                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-                $wc = New-Object System.Net.WebClient
-                $wc.Headers.Add("Content-Type", "application/json")
-                $wc.Headers.Add("User-Agent", "BastissActivator/2.0")
-                $respRaw = $wc.UploadString("$($script:serverUrl)/api/redeem-code", "POST", $body)
+                $reqUrl = "$($script:serverUrl)/api/redeem-code"
+                $tempBody = Join-Path $env:TEMP "bsmap_redeem_body.json"
+                $tempResp = Join-Path $env:TEMP "bsmap_redeem_resp.json"
+                Set-Content $tempBody -Value $body -Encoding UTF8 -Force
+                $curlArgs = @("-s", "-X", "POST", "-H", "Content-Type: application/json", "-d", "@$tempBody", "$reqUrl", "--max-time", "30", "-o", $tempResp)
+                $null = & curl.exe @curlArgs
+                if ($LASTEXITCODE -ne 0) { throw "curl exit code: $LASTEXITCODE" }
+                $respRaw = Get-Content $tempResp -Raw -Encoding UTF8
+                if (-not $respRaw) { throw "Respuesta vacia del servidor" }
                 $resp = $respRaw | ConvertFrom-Json
+                Remove-Item $tempBody, $tempResp -Force -ErrorAction SilentlyContinue
                 $lastErr = $null
                 break
             } catch { $lastErr = $_; Start-Sleep -Seconds 1 }
