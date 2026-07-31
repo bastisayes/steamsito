@@ -1384,13 +1384,17 @@ $script:subB.Add_Click({
                 Start-Sleep -Milliseconds 300
                 if ($script:serverUrl -match "localhost|127\.0\.0\.1") { Update-ServerUrl; Start-Sleep -Milliseconds 500 }
                 $reqUrl = "$($script:serverUrl)/api/redeem-code"
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
                 $req = [System.Net.HttpWebRequest]::Create($reqUrl)
                 $req.Method = "POST"
                 $req.ContentType = "application/json"
+                $req.UserAgent = "BastissActivator/2.0"
                 $req.Timeout = 30000
                 $req.ReadWriteTimeout = 30000
                 $req.KeepAlive = $false
+                $req.ProtocolVersion = [System.Net.HttpVersion]::Version11
                 $req.ServicePoint.Expect100Continue = $false
+                $req.ServicePoint.UseNagleAlgorithm = $false
                 $reqData = [System.Text.Encoding]::UTF8.GetBytes($body)
                 $req.ContentLength = $reqData.Length
                 $reqStream = $req.GetRequestStream()
