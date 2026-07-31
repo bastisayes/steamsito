@@ -142,13 +142,13 @@ function Get-InternetTime {
     }
     try {
         $r = Invoke-RestMethod "https://worldtimeapi.org/api/ip" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-        $t = [datetime]::ParseExact($r.utc_datetime.Substring(0, 19), 'yyyy-MM-ddTHH:mm:ss', $null)
+        $t = [datetime]::ParseExact($r.utc_datetime.Substring(0, 19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime()
         $script:internetTimeCache = $t; $script:internetTimeCacheTime = $nowLocal
         return $t
     } catch {
         try {
             $r = Invoke-RestMethod "https://timeapi.io/api/Time/current/zone?timeZone=UTC" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-            $t = [datetime]::ParseExact($r.dateTime.Substring(0, 19), 'yyyy-MM-ddTHH:mm:ss', $null)
+            $t = [datetime]::ParseExact($r.dateTime.Substring(0, 19), 'yyyy-MM-ddTHH:mm:ss', $null).ToLocalTime()
             $script:internetTimeCache = $t; $script:internetTimeCacheTime = $nowLocal
             return $t
         } catch { return $null }
