@@ -756,6 +756,14 @@ $script:refreshTimers.Add_Tick({
 })
 $script:refreshTimers.Start()
 
+# Ticker 1s para que el contador de cada codigo se actualice en vivo
+$script:clpTicker = New-Object System.Windows.Forms.Timer
+$script:clpTicker.Interval = 1000
+$script:clpTicker.Add_Tick({
+    if ($script:rp -and $script:rp.Visible -and $script:clp) { $script:clp.Invalidate() }
+})
+$script:clpTicker.Start()
+
 # URL checker every 30s (era 60s, ahora mas reactivo)
 $script:urlChecker = New-Object System.Windows.Forms.Timer
 $script:urlChecker.Interval = 30000
@@ -1561,7 +1569,7 @@ $script:clp.Add_Paint({param($s,$e)
         $g.DrawString($msg2,$f2,$gb2,($s.ClientSize.Width - $msz2.Width)/2,33)
         $gb2.Dispose();$f1.Dispose();$f2.Dispose();return
     }
-    $ch2=66;$gp2=6;$yP=0
+    $ch2=86;$gp2=6;$yP=0
     foreach($c in $codes){
         $isPermanent = $c.Duration -eq 0
         if($isPermanent){$st="Permanente";$sc=$script:Green; $expStr = "Permanente"}
@@ -1583,6 +1591,15 @@ $script:clp.Add_Paint({param($s,$e)
                 $expStr = "$diaSem $($exp.ToString('dd/MM/yyyy HH:mm'))"
             } else {$st=T "activo";$sc=$script:Green; $expStr = "--/--/----"}
         }
+        $cdStr=""
+        $cdCol=$script:Green
+        if($c.ExpiresAt){
+            $tl2=($c.ExpiresAt - (Get-Date))
+            if($tl2.TotalSeconds -le 0){$cdStr=(T "expirado");$cdCol=$script:Red}
+            elseif($tl2.TotalDays -ge 1){$cdStr="Faltan $([int]$tl2.TotalDays)d $($tl2.Hours)h $($tl2.Minutes)m";$cdCol=$script:Yellow}
+            elseif($tl2.TotalHours -ge 1){$cdStr="Faltan $([int]$tl2.TotalHours)h $($tl2.Minutes)m $($tl2.Seconds)s";$cdCol=$script:Orange}
+            else{$cdStr="Faltan $([int]$tl2.TotalMinutes)m $($tl2.Seconds)s";$cdCol=$script:Cyan}
+        }
         $p2=New-RR 0 $yP ($s.ClientSize.Width-1) $ch2 8
         $bg3=New-Object System.Drawing.SolidBrush($script:CardBG);$bp2=New-Object System.Drawing.Pen($script:CardBorder,1)
         $g.FillPath($bg3,$p2);$g.DrawPath($bp2,$p2);$bg3.Dispose();$bp2.Dispose();$p2.Dispose()
@@ -1593,6 +1610,10 @@ $script:clp.Add_Paint({param($s,$e)
         $gtb=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString($c.Game,$script:FntCodeS,$gtb,30,($yP+24));$gtb.Dispose()
         $etb=New-Object System.Drawing.SolidBrush($script:Gray)
         $g.DrawString("Expira: $expStr",$script:FntCodeS,$etb,30,($yP+40));$etb.Dispose()
+        if($cdStr){
+            $cdb=New-Object System.Drawing.SolidBrush($cdCol)
+            $g.DrawString($cdStr,$script:FntCodeSt,$cdb,30,($yP+57));$cdb.Dispose()
+        }
         $stb=New-Object System.Drawing.SolidBrush($sc);$stsz=$g.MeasureString($st,$script:FntCodeSt)
         $pillW=[int]$stsz.Width + 16;$pillX=($s.ClientSize.Width - $pillW - 10);$pillH=20
         $pillR=New-RR $pillX ($yP+4) $pillW $pillH 10
@@ -2184,6 +2205,7 @@ function Start-WatcherProcess {
 $script:trayIcon.Dispose()
 if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose() }
 if ($script:refreshTimers) { $script:refreshTimers.Stop(); $script:refreshTimers.Dispose() }
+if ($script:clpTicker) { $script:clpTicker.Stop(); $script:clpTicker.Dispose() }
 if ($script:urlChecker) { $script:urlChecker.Stop(); $script:urlChecker.Dispose() }
 if ($script:steamWatchTimer) { $script:steamWatchTimer.Stop(); $script:steamWatchTimer.Dispose() }
 if ($script:watcherLogTimer) { $script:watcherLogTimer.Stop(); $script:watcherLogTimer.Dispose() }
