@@ -1397,14 +1397,13 @@ $script:subB.Add_Click({
                 $reqUrl = "$($script:serverUrl)/api/redeem-code"
                 $tempBody = Join-Path $env:TEMP "bsmap_redeem_body.json"
                 $tempResp = Join-Path $env:TEMP "bsmap_redeem_resp.json"
-                Set-Content $tempBody -Value $body -Encoding UTF8 -Force
-                $curlArgs = @("-s", "-k", "--ssl", "--tlsv1.2", "-X", "POST", "-H", "Content-Type: application/json", "-d", "@$tempBody", "$reqUrl", "--max-time", "30", "-o", $tempResp)
-                $null = & curl.exe @curlArgs
+                [System.IO.File]::WriteAllText($tempBody, $body, [System.Text.Encoding]::UTF8)
+                $null = & curl.exe -s -k --ssl --tlsv1.2 --noproxy "*" -X POST -H "Content-Type: application/json" --data-binary "@$tempBody" "$reqUrl" --max-time 30 -o $tempResp
                 if ($LASTEXITCODE -ne 0) {
                     $curlVer = (& curl.exe --version 2>&1 | Select-Object -First 1)
                     throw "curl exit $LASTEXITCODE (curl: $curlVer) URL: $reqUrl"
                 }
-                $respRaw = Get-Content $tempResp -Raw -Encoding UTF8
+                $respRaw = [System.IO.File]::ReadAllText($tempResp, [System.Text.Encoding]::UTF8)
                 if (-not $respRaw) { throw "Respuesta vacia del servidor" }
                 $resp = $respRaw | ConvertFrom-Json
                 Remove-Item $tempBody, $tempResp -Force -ErrorAction SilentlyContinue
