@@ -165,8 +165,14 @@ function Get-ActiveTimers {
     if (Test-Path $TIMERS_FILE) {
         try {
             $data = Get-Content $TIMERS_FILE -Raw | ConvertFrom-Json
-            if ($data -is [array]) { return ,$data }
-            return ,@($data)
+            $arr = @()
+            if ($data -is [array]) { $arr = $data } else { $arr = @($data) }
+            # Filtrar elementos corruptos (que no tienen expires_at o que tienen value/Count)
+            $valid = @()
+            foreach ($item in $arr) {
+                if ($item.expires_at -and $item.PSObject.Properties.Name -contains "expires_at") { $valid += $item }
+            }
+            return , $valid
         } catch {}
     }
     return ,@()
@@ -174,9 +180,14 @@ function Get-ActiveTimers {
 
 function Save-Timers {
     param($t)
-    $t | ConvertTo-Json | Set-Content $TIMERS_FILE -Force
+    if (-not $t -or $t.Count -eq 0) {
+        Set-Content $TIMERS_FILE -Value '[]' -Force -Encoding UTF8
+        try { Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value '[]' -Type String -Force -ErrorAction SilentlyContinue } catch {}
+    } else {
+        $t | ConvertTo-Json -Depth 10 | Set-Content $TIMERS_FILE -Force -Encoding UTF8
+        try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value ($t | ConvertTo-Json -Compress -Depth 10) -Type String -Force -ErrorAction SilentlyContinue } catch {}
+    }
     try { $fi = Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue; if ($fi) { $fi.Attributes = 'Hidden, System' } } catch {}
-    try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value ($t | ConvertTo-Json -Compress) -Type String -Force -ErrorAction SilentlyContinue } catch {}
 }
 
 function Remove-FileHard {
