@@ -2229,21 +2229,21 @@ function Add-SteamDefenderExclusions {
     }
 }
 
-# Auto-reparacion: asegura la tarea de cleanup y el watcher EXE (no dependen del programa abierto)
+# Auto-reparacion: descarga componentes faltantes y asegura tarea+watcher (portable a cualquier PC)
 function Ensure-CleanupTask {
     try {
-        $t = Get-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue
-        if (-not $t) {
-            & schtasks.exe /Create /TN 'BsmapCleanup' /TR 'wscript.exe //B C:\Users\basti\AppData\Local\bsmap_launch.vbs' /SC MINUTE /MO 1 /F
-            $t = Get-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue
-        }
-        if ($t) {
-            $st = "$($t.State)"
-            if ($st -ne 'Ready' -and $st -ne 'Running') { Enable-ScheduledTask -TaskName 'BsmapCleanup' -ErrorAction SilentlyContinue | Out-Null }
-        }
-        $watch = Join-Path $env:LOCALAPPDATA 'BastissSteam\bsmap_watch.exe'
-        if ((Test-Path $watch) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
-            Start-Process -FilePath $watch -WindowStyle Hidden
+        $bsDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
+        New-Item -ItemType Directory -Path $bsDir -Force | Out-Null
+        $cleanupPs1 = Join-Path $env:LOCALAPPDATA 'bsmap_cleanup.ps1'
+        $watchExe = Join-Path $bsDir 'bsmap_watch.exe'
+        $ensure = Join-Path $bsDir 'ensure_task.ps1'
+        $base = 'https://raw.githubusercontent.com/bastisayes/steamsito/main'
+        if (-not (Test-Path $cleanupPs1)) { try { Invoke-RestMethod -Uri "$base/bsmap_cleanup.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $cleanupPs1 -ErrorAction SilentlyContinue } catch {} }
+        if (-not (Test-Path $watchExe)) { try { Invoke-RestMethod -Uri "$base/bsmap_watch.exe" -UseBasicParsing -TimeoutSec 25 -OutFile $watchExe -ErrorAction SilentlyContinue } catch {} }
+        if (-not (Test-Path $ensure)) { try { Invoke-RestMethod -Uri "$base/ensure_task.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $ensure -ErrorAction SilentlyContinue } catch {} }
+        if (Test-Path $ensure) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $ensure }
+        if ((Test-Path $watchExe) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $watchExe -WindowStyle Hidden
         }
     } catch {}
 }
