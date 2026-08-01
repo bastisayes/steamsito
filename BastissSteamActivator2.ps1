@@ -1629,7 +1629,7 @@ $script:clp.Add_Paint({param($s,$e)
                     else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
                 }
                 # Formato fecha con dia de semana + hora:minuto: "Lun 15/08/2025 18:30"
-                                $diasEsp = @('Dom','Lun','Mar','MiÃƒÂƒÃ‚Â©','Jue','Vie','SÃƒÂƒÃ‚Â¡b')
+                $diasEsp = @('Dom','Lun','Mar','Mie','Jue','Vie','Sab')
                 $expDisp = ConvertTo-ClockTime $exp
                 $diaSem = $diasEsp[$expDisp.DayOfWeek.value__]
                 $expStr = "$diaSem $($expDisp.ToString('dd/MM/yyyy HH:mm'))"
