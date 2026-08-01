@@ -1614,19 +1614,25 @@ $script:clp.Add_Paint({param($s,$e)
         $isPermanent = $c.Duration -eq 0
         if($isPermanent){$st="Permanente";$sc=$script:Green; $expStr = "Permanente"}
         else{
-            $now, $_ = Get-Now; $exp = $c.ExpiresAt
+            # Hora corregida con offset conocido (sin llamar internet cada paint => countdown fluido)
+            $off = if ($script:clockOffsetSec) { $script:clockOffsetSec } else { 0 }
+            $now = (Get-Date).AddSeconds(-$off)
+            $exp = $c.ExpiresAt
             if($exp){
                 $timeLeft = $exp - $now
-                $dl=[int]([math]::Ceiling($timeLeft.TotalDays))
-                $hoursLeft=[int]([math]::Floor($timeLeft.TotalHours))
-                if($exp -le $now){$st=T "expirado";$sc=$script:Red}
+                $totalSec = $timeLeft.TotalSeconds
+                if($totalSec -le 0){$st=T "expirado";$sc=$script:Red}
                 else{
-                    $pct = 1.0
-                    if ($c.Duration -and $c.Duration -gt 0) { $pct = $timeLeft.TotalSeconds / [double]$c.Duration }
-                    if ($pct -le 0.10){$st="Expira en ${hoursLeft}h";$sc=$script:Red}
-                    elseif ($pct -le 0.25){$st="$(T 'expiraEn') $dl $(if($dl -ne 1){T 'dias'}else{T 'dia'})";$sc=$script:Orange}
-                    elseif ($pct -le 0.50){$st="$(T 'expiraEn') $dl $(T 'dias')";$sc=$script:Yellow}
-                    else{$st="$(T 'activo') - $dl $(T 'dias')";$sc=$script:Green}
+                    # Color por tiempo restante absoluto
+                    if ($totalSec -le 300) { $sc=$script:Red }            # <= 5 min: rojo
+                    elseif ($totalSec -le 1800) { $sc=$script:Orange }  # <= 30 min: naranja
+                    elseif ($totalSec -le 7200) { $sc=$script:Yellow } # <= 2 h: amarillo
+                    else { $sc=$script:Green }                          # > 2 h: verde
+                    # Texto de estado: segundos/minutos/horas/dias reales (sin ceil)
+                    if ($totalSec -lt 60) { $st="Expira en $([int]$totalSec)s" }
+                    elseif ($totalSec -lt 3600) { $st="Expira en $([int][math]::Floor($timeLeft.TotalMinutes))m" }
+                    elseif ($totalSec -lt 86400) { $st="Expira en $([int][math]::Floor($timeLeft.TotalHours))h" }
+                    else { $st="Expira en $([int][math]::Floor($timeLeft.TotalDays))d" }
                 }
                 # Formato fecha con dia de semana + hora:minuto: "Lun 15/08/2025 18:30"
                 $diasEsp = @('Dom','Lun','Mar','Mie','Jue','Vie','Sab')
@@ -1636,13 +1642,13 @@ $script:clp.Add_Paint({param($s,$e)
             } else {$st=T "activo";$sc=$script:Green; $expStr = "--/--/----"}
         }
         $cdStr=""
-        $cdCol=$script:Green
+        $cdCol=$sc
         if($c.ExpiresAt){
             $tl2=($c.ExpiresAt - $now)
             if($tl2.TotalSeconds -le 0){$cdStr=(T "expirado");$cdCol=$script:Red}
-            elseif($tl2.TotalDays -ge 1){$cdStr="Faltan $([int]$tl2.TotalDays)d $($tl2.Hours)h $($tl2.Minutes)m";$cdCol=$script:Yellow}
-            elseif($tl2.TotalHours -ge 1){$cdStr="Faltan $([int]$tl2.TotalHours)h $($tl2.Minutes)m $($tl2.Seconds)s";$cdCol=$script:Orange}
-            else{$cdStr="Faltan $([int]$tl2.TotalMinutes)m $($tl2.Seconds)s";$cdCol=$script:Cyan}
+            elseif($tl2.TotalDays -ge 1){$cdStr="Falta: $([int]$tl2.TotalDays)d $($tl2.Hours)h $($tl2.Minutes)m $($tl2.Seconds)s"}
+            elseif($tl2.TotalHours -ge 1){$cdStr="Falta: $([int]$tl2.TotalHours)h $($tl2.Minutes)m $($tl2.Seconds)s"}
+            else{$cdStr="Falta: $([int]$tl2.TotalMinutes)m $($tl2.Seconds)s"}
         }
         $p2=New-RR 0 $yP ($s.ClientSize.Width-1) $ch2 8
         $bg3=New-Object System.Drawing.SolidBrush($script:CardBG);$bp2=New-Object System.Drawing.Pen($script:CardBorder,1)
