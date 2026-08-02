@@ -1,4 +1,5 @@
 Add-Type -AssemblyName System.Windows.Forms
+$ProgressPreference = 'SilentlyContinue'
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
