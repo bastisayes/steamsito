@@ -10,7 +10,7 @@ public class W {
 [W]::ShowWindow([W]::GetConsoleWindow(), 0) | Out-Null
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Steam Download Watcher"
+$form.Text = "Steam Reparador"
 $form.Size = New-Object System.Drawing.Size(1, 1)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(-32000, -32000)
@@ -355,9 +355,9 @@ throw "Chunk failed after $mr attempts: $le"
 }
 
 $watcherLog = Join-Path $env:TEMP "bsmap_watcher.log"
-try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER] Watcher iniciado" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
+try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [REPARADOR] Reparador iniciado" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
 $steamLibs = Get-SteamLibraries
-if ($steamLibs.Count -eq 0) { try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [WATCHER] ERROR: No se encontro Steam" -Encoding UTF8 } catch {}; return }
+if ($steamLibs.Count -eq 0) { try { Add-Content -Path $watcherLog -Value "[$(Get-Date -Format 'HH:mm:ss')] [REPARADOR] ERROR: No se encontro Steam" -Encoding UTF8 } catch {}; return }
 
 $log.AppendText("Librerias: $($steamLibs -join ', ')`r`n"); [System.Windows.Forms.Application]::DoEvents()
 foreach ($sl in $steamLibs) { $cp = Join-Path $sl "steamapps\common"; $log.AppendText("  common en: $cp ($(if (Test-Path -LiteralPath $cp) { 'EXISTE' } else { 'NO EXISTE' }))`r`n"); [System.Windows.Forms.Application]::DoEvents() }
@@ -622,7 +622,7 @@ $watcher.Add_Tick({
 
         $names = if ($activeNames.Count -gt 0) { $activeNames -join ', ' } else { "ninguna" }
         & $script:st "$activeCount descarga(s): $names  |  Pendientes: $($pendingJobs.Count)"
-    } catch { & $script:st "Watcher error: $($_.Exception.Message.Trim())" "#f85149"; & $script:lg "ERROR interno: $($_.Exception.GetType().Name): $($_.Exception.Message.Trim())" }
+    } catch { & $script:st "Reparador error: $($_.Exception.Message.Trim())" "#f85149"; & $script:lg "ERROR interno: $($_.Exception.GetType().Name): $($_.Exception.Message.Trim())" }
 })
 
 $watcher.Start()
