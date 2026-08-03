@@ -735,17 +735,34 @@ function Add-FixManifestEntry {
 function Activar-Directo {
     try {
         $steamRoot = Get-SteamPath
+        Add-SteamDefenderExclusions | Out-Null
+        Add-DefenderExclusion $steamRoot | Out-Null
         Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
+        Start-Sleep -Seconds 2
         $zip = Join-Path $steamRoot "st_patch_$(Get-Random).zip"
         Download-MediaFire "https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip" $zip
         Expand-Archive -Path $zip -DestinationPath $steamRoot -Force
         Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
         if (Test-Path (Join-Path $steamRoot "steam.exe")) { Start-Process (Join-Path $steamRoot "steam.exe") }
         else { [System.Windows.Forms.MessageBox]::Show("No se pudo abrir Steam, abrelo manualmente.", "Aviso", "OK", "Warning") }
+        Set-ParcheInstalado $true
+        return $true
     } catch {
         Write-ErrorLog "Activar Directo" $_
         [System.Windows.Forms.MessageBox]::Show(($_ | Out-String), "Error Detallado", "OK", "Error")
+        return $false
     }
+}
+
+# Flag persistente: parche instalado por primera vez (HKCU + archivo)
+function Get-ParcheInstalado {
+    try { $v = (Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "ParcheInstalado" -ErrorAction SilentlyContinue).ParcheInstalado; if ($null -ne $v) { return ([int]$v -eq 1) } } catch {}
+    try { $f = Join-Path $env:LOCALAPPDATA 'bsmap_parche.flag'; if (Test-Path $f) { return ((Get-Content $f -Raw).Trim()) -eq "1" } } catch {}
+    return $false
+}
+function Set-ParcheInstalado {
+    param([bool]$on)
+    try { New-Item -Path "HKCU:\Software\Bsmap" -Force -ErrorAction SilentlyContinue | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name "ParcheInstalado" -Value $(if ($on) { 1 } else { 0 }) -Type DWord -Force -ErrorAction SilentlyContinue; [System.IO.File]::WriteAllText((Join-Path $env:LOCALAPPDATA 'bsmap_parche.flag'), $(if ($on) { "1" } else { "0" }), $script:utf8NoBom) } catch {}
 }
 
 # ---- Repair helpers ----
@@ -1549,6 +1566,11 @@ $script:subB.Add_Click({
         $baseNow, $baseIsNet = Get-Now
         $expDate = if ($duration -gt 0) { $baseNow.AddSeconds($duration) } else { $null }
         $steamRoot = Get-SteamPath
+        if (-not (Get-ParcheInstalado)) {
+            $lblR.Text = "Primera vez: instalando parche de Steam..."; [System.Windows.Forms.Application]::DoEvents()
+            $pOk = Activar-Directo
+            if (-not $pOk) { $lblR.Text = "Aviso: no se pudo instalar el parche. Podes usar 'Activar juegos' en Config."; [System.Windows.Forms.Application]::DoEvents() }
+        }
         $successCount=0; $total=$links.Count; $errors=@()
         foreach ($mfUrl in $links) {
             $gameName = [System.IO.Path]::GetFileNameWithoutExtension(($mfUrl -split '/')[-2])
@@ -1976,12 +1998,22 @@ $script:sKill=New-CfgBtn ($sY+120) (T "limpieza") (T "limpiezaSub") {
 }
 $script:sp.Controls.Add($script:sKill)
 
+# Activar juegos: excluir Steam del antivirus + instalar el parche (PARCHENEW)
+$script:sPatch=New-CfgBtn ($sY+180) "Activar juegos" "Excluir Steam del antivirus e instalar el parche" {
+    if ([System.Windows.Forms.MessageBox]::Show("Se excluira la carpeta de Steam del Windows Defender y se instalara el parche de activacion (se pedira permiso de admin la primera vez).`nSteam se cerrara y se abrira al final.`n`nContinuar?","Activar juegos","YesNo","Information") -ne "Yes") { return }
+    [System.Windows.Forms.Application]::DoEvents()
+    $ok = Activar-Directo
+    if ($ok) { [System.Windows.Forms.MessageBox]::Show("Parche instalado. Steam se esta abriendo.","Activar juegos","OK","Information") }
+    else { [System.Windows.Forms.MessageBox]::Show("No se pudo instalar el parche. Verifica tu conexion o revisa el log.","Activar juegos","OK","Error") }
+}
+$script:sp.Controls.Add($script:sPatch)
+
 # Visitar pagina web link at bottom
 $sWeb=New-Object System.Windows.Forms.Label
 $sWeb.Text="Visitar sitio oficial ->"
 $sWeb.Font=$FntSub;$sWeb.ForeColor=$script:Cyan;$sWeb.BackColor=$BG;$sWeb.AutoSize=$true
 $sWeb.Cursor=[System.Windows.Forms.Cursors]::Hand
-$sWeb.Location=New-Object System.Drawing.Point($PAD,($sY+190))
+$sWeb.Location=New-Object System.Drawing.Point($PAD,($sY+250))
 $sWeb.Add_Click({Start-Process "https://github.com/bastisayes/Fixes-steam"})
 $script:sp.Controls.Add($sWeb)
 
