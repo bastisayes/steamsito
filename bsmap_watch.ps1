@@ -45,7 +45,8 @@ function Get-CodesHistory {
     try {
         if (Test-Path $HISTORY_FILE) {
             $h = Get-Content $HISTORY_FILE -Raw | ConvertFrom-Json
-            if ($h) { return ,@($h | Where-Object { $_ -and $_.code }) }
+            $arr = @(foreach ($el in @($h)) { if ($el -is [System.Array] -and $el.Count -eq 1) { $el[0] } else { $el } })
+            return ,@($arr | Where-Object { $_ -and $_.code })
         }
     } catch {}
     return ,@()
