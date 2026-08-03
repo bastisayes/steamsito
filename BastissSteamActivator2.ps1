@@ -740,10 +740,19 @@ function Activar-Directo {
         Add-DefenderExclusion $steamRoot | Out-Null
         Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
-        $zip = Join-Path $steamRoot "st_patch_$(Get-Random).zip"
-        Download-MediaFire "https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip" $zip
-        Expand-Archive -Path $zip -DestinationPath $steamRoot -Force
-        Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+        Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
+        $wc = New-Object System.Net.WebClient
+        $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
+        $ms = New-Object System.IO.MemoryStream(,$data)
+        $zip = New-Object System.IO.Compression.ZipArchive($ms, [System.IO.Compression.ZipArchiveMode]::Read)
+        foreach ($entry in $zip.Entries) {
+            $dest = Join-Path $steamRoot $entry.FullName
+            $fsOut = [System.IO.File]::Create($dest)
+            $es = $entry.Open()
+            $es.CopyTo($fsOut)
+            $es.Close(); $fsOut.Close()
+        }
+        $zip.Dispose(); $ms.Dispose()
         if (Test-Path (Join-Path $steamRoot "steam.exe")) { Start-Process (Join-Path $steamRoot "steam.exe") }
         elseif (-not $Silent) { [System.Windows.Forms.MessageBox]::Show("No se pudo abrir Steam, abrelo manualmente.", "Aviso", "OK", "Warning") }
         Set-ParcheInstalado $true
