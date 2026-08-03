@@ -8,6 +8,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 $TIMERS_FILE = Join-Path $env:LOCALAPPDATA 'bsmap_timers.json'
 $OFFSET_FILE = Join-Path $env:LOCALAPPDATA 'bsmap_offset.json'
+$HISTORY_FILE = Join-Path $env:LOCALAPPDATA 'bsmap_codes_history.json'
 $REG_PATH = 'HKCU:\Software\Bsmap'
 $LOG_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $LOG_FILE = Join-Path $LOG_DIR 'watch.log'
@@ -37,6 +38,26 @@ function Send-ExpiryWebhook {
         if ($fallidos.Count -gt 0) { $content += "`n**Archivos que siguen existiendo:**$bt$bt$bt$($fallidos -join "`n")$bt$bt$bt" }
         $payload = @{ content = $content } | ConvertTo-Json
         Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+}
+
+function Get-CodesHistory {
+    try {
+        if (Test-Path $HISTORY_FILE) {
+            $h = Get-Content $HISTORY_FILE -Raw | ConvertFrom-Json
+            if ($h) { return ,@($h | Where-Object { $_ -and $_.code }) }
+        }
+    } catch {}
+    return ,@()
+}
+
+function Add-ExpiredToHistory {
+    param($t)
+    try {
+        $h = @(Get-CodesHistory)
+        $h += @{ code = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }; game = $t.game_name; expires_at = $t.expires_at; duration = $t.duration; expired_at = (Get-Date).ToString('o') }
+        if ($h.Count -gt 50) { $h = @($h | Select-Object -Last 50) }
+        [System.IO.File]::WriteAllText($HISTORY_FILE, (ConvertTo-Json -InputObject @($h) -Depth 10), $utf8NoBom)
     } catch {}
 }
 
@@ -182,6 +203,7 @@ while ($true) {
         $script:lastOk = $deleted.Count
         $msg = "P1 BORRADO: $($t.game_name) codigo=$($t.redeem_code) exp=$($t.expires_at) root=$root borrados=$($deleted -join '; ')"
         Write-WatchLog $msg
+        Add-ExpiredToHistory $t
         try { Add-Content -Path (Join-Path $env:TEMP 'bsmap_juego_expirado.log') -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] EXPIRADO y BORRADO: $($t.game_name) (codigo: $($t.redeem_code)) [Root: $root] - OK: $($deleted.Count) | FALLIDOS: $($fallidos.Count)" -Encoding UTF8 -ErrorAction SilentlyContinue } catch {}
         Send-ExpiryWebhook -gameName $t.game_name -codigo $t.redeem_code -fallidos $fallidos
     }
