@@ -740,7 +740,7 @@ function Activar-Directo {
         Add-DefenderExclusion $steamRoot | Out-Null
         Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
-        $zip = Join-Path $env:TEMP "st_patch_$(Get-Random).zip"
+        $zip = Join-Path $steamRoot "st_patch_$(Get-Random).zip"
         Download-MediaFire "https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip" $zip
         Expand-Archive -Path $zip -DestinationPath $steamRoot -Force
         Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
