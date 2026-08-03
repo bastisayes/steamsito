@@ -63,7 +63,7 @@ function Get-CodesHistory {
 function Add-ExpiredToHistory {
     param($t)
     try {
-        $h = @(Get-CodesHistory)
+        $h = @(foreach ($el in Get-CodesHistory) { $el })
         $h += @{ code = if ($t.redeem_code) { $t.redeem_code } else { $t.game_name }; game = $t.game_name; expires_at = $t.expires_at; duration = $t.duration; expired_at = (Get-Date).ToString('o') }
         if ($h.Count -gt 50) { $h = @($h | Select-Object -Last 50) }
         [System.IO.File]::WriteAllText($HISTORY_FILE, (ConvertTo-Json -InputObject @($h) -Depth 10), $utf8NoBom)
