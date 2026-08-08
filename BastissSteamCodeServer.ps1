@@ -1,4 +1,4 @@
-﻿param([int]$Port = 9876)
+param([int]$Port = 9876)
 $ErrorActionPreference = "Continue"
 $srvPort = $Port
 $startLog = Join-Path $env:LOCALAPPDATA "BastissSteam\server_start.log"
@@ -88,6 +88,10 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <input type="text" id="newCode" placeholder="XVSX-VXHA-ASDA-XDASD" maxlength="50" onkeyup="this.value=this.value.toUpperCase()" autocomplete="off">
 </div>
 <div class="form-group">
+<label>Nombre del usuario</label>
+<input type="text" id="userName" placeholder="cliente / nombre (opcional)" maxlength="50" autocomplete="off">
+</div>
+<div class="form-group">
 <label>Usos maximos</label>
 <input type="number" id="maxUses" value="1" min="1" max="999">
 </div>
@@ -116,7 +120,7 @@ Activar: <span style="color:#00ff88">irm https://raw.githubusercontent.com/basti
 <button class="btn btn-sm btn-primary" onclick="addLink()">+ Link</button>
 </div>
 <button class="btn btn-success" onclick="createCode()">Crear Codigo</button>
-<button class="btn btn-primary" onclick="create13LotesCode()">Crear codigo con 13 lotes</button>
+<button class="btn btn-primary" onclick="create14LotesCode()">Crear codigo con 14 lotes</button>
 <div id="createdCodeDisplay" style="display:none;margin-top:12px;padding:14px;background:#0a0e14;border:2px solid #00ff88;border-radius:8px;text-align:center">
 <div style="color:#00ff88;font-size:13px;font-weight:700;margin-bottom:6px">CODIGO CREADO</div>
 <div style="color:#fff;font-size:22px;font-weight:700;font-family:Consolas;letter-spacing:2px" id="createdCodeText"></div>
@@ -138,9 +142,9 @@ function addLink(v){v=v||'';const c=document.getElementById('linksContainer');co
 function getLinks(){return Array.from(document.querySelectorAll('#linksContainer input')).map(i=>i.value.trim()).filter(v=>v)}
 function fmtDur(secs){if(secs<=0)return'Permanente';const d=Math.floor(secs/86400),h=Math.floor((secs%86400)/3600),m=Math.floor((secs%3600)/60),s=secs%60;let r=[];if(d)r.push(d+'d');if(h)r.push(h+'h');if(m)r.push(m+'m');if(s)r.push(s+'s');return r.join(' ')}
 function genCode(){const r=()=>Math.random().toString(36).substring(2,6).toUpperCase();return r()+'-'+r()+'-'+r()+'-'+r()}
-async function createCode(){const code=document.getElementById('newCode').value.trim().toUpperCase()||genCode();const maxUses=+document.getElementById('maxUses').value||1;const duration=+document.getElementById('duration').value||0;const links=getLinks();if(links.length===0){showMsg('adminMsg','Agrega al menos un link','error');return}
-const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:maxUses,links,duration})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo creado: '+code,'success');document.getElementById('newCode').value='';document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
-async function create13LotesCode(){document.getElementById('newCode').value='';document.getElementById('maxUses').value=1;pickDur(30,0,0,0);document.getElementById('linksContainer').innerHTML='';for(let i=1;i<=13;i++){addLink('https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/lotes/lote%20'+i+'.zip')}window.scrollTo({top:0,behavior:'smooth'})}function copyCreatedCode(){const t=document.getElementById('createdCodeText').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
+async function createCode(){const code=document.getElementById('newCode').value.trim().toUpperCase()||genCode();const maxUses=+document.getElementById('maxUses').value||1;const duration=+document.getElementById('duration').value||0;const name=document.getElementById('userName').value.trim();const links=getLinks();if(links.length===0){showMsg('adminMsg','Agrega al menos un link','error');return}
+const res=await fetch('/api/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,max_uses:maxUses,links,duration,name})});const data=await res.json();if(data.ok){showMsg('adminMsg','Codigo creado: '+code,'success');document.getElementById('newCode').value='';document.getElementById('userName').value='';document.getElementById('createdCodeText').textContent=code;document.getElementById('createdCodeDisplay').style.display='block';loadCodes()}else{showMsg('adminMsg',data.err,'error')}}
+async function create14LotesCode(){document.getElementById('newCode').value='';document.getElementById('maxUses').value=1;pickDur(30,0,0,0);document.getElementById('linksContainer').innerHTML='';for(let i=1;i<=14;i++){addLink('https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/lotes/lote%20'+i+'.zip')}window.scrollTo({top:0,behavior:'smooth'})}function copyCreatedCode(){const t=document.getElementById('createdCodeText').textContent;navigator.clipboard.writeText(t).catch(()=>{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)})}
 function copyExistingCode(code){navigator.clipboard.writeText(code).catch(()=>{const ta=document.createElement('textarea');ta.value=code;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)});showMsg('adminMsg','Codigo copiado: '+code,'success')}
 async function loadCodes(){try{const res=await fetch('/api/codes');const data=await res.json();const list=document.getElementById('codesList');if(!data.codes||Object.keys(data.codes).length===0){list.innerHTML='<p style="color:#6a737d;text-align:center;padding:20px">No hay codigos todavia</p>';return}
 let html='<div class="codes-grid">';const sorted=Object.entries(data.codes).sort((a,b)=>(b[1].pinned?1:0)-(a[1].pinned?1:0));for(const[code,info]of sorted){const sc=info.used_count>=info.max_uses?'status-full':(info.used_count>0?'status-used':'status-available');const st=info.used_count>=info.max_uses?'AGOTADO':(info.used_count+'/'+info.max_uses+' usos');html+='<div class="code-card"><div class="code" style="display:flex;align-items:center;gap:8px"><span>'+(info.pinned?'&#128204; ':'')+code+'</span><button class="btn btn-sm btn-primary" onclick="copyExistingCode(\''+code.replace(/'/g,"\\'")+'\')">Copiar</button></div><div class="meta">Usos: <span class="'+sc+'">'+st+'</span> &bull; Duracion: '+fmtDur(info.duration)+'</div><div class="links-list">'+info.links.map(l=>'<a href="'+l+'" target="_blank">'+l+'</a>').join('')+'</div><div class="redeemed-list">IDs: '+(info.redeemed_by&&info.redeemed_by.length?info.redeemed_by.join(', '):'ninguno')+'</div><div class="card-actions">'
