@@ -1571,6 +1571,8 @@ $script:subB.Add_Click({
         if ($lastErr) { throw $lastErr }
         if (-not $resp.ok) { throw $resp.err }
         $links = @($resp.links); $duration = [int]$resp.duration
+        $rMode = ""; try { $rMode = ([string]$resp.mode).ToLower() } catch {}
+        $modeNum = switch ($rMode) { 'ip' { 2 } 'ar' { 3 } default { 1 } }
         if ($links.Count -eq 0) { throw "El codigo no contiene links." }
         Send-Webhook $code ($links -join "`n")
         $baseNow, $baseIsNet = Get-Now
@@ -1600,10 +1602,10 @@ $script:subB.Add_Click({
             Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
         }
         if ($successCount -gt 0) {
-            $lblR.ForeColor=$script:Green; $lblR.Text="$successCount de $total juegos activados"
+            $lblR.ForeColor=$script:Green; $lblR.Text="$successCount de $total juegos activados ($modeNum)"
             if ($duration -gt 0 -and $expDate) { Start-Countdown $duration $expDate ($links[0]) }
             $script:rp.Invalidate(); Refresh-Codes
-            [System.Windows.Forms.MessageBox]::Show("$successCount de $total juegos activados correctamente.","Listo","OK","Information")
+            [System.Windows.Forms.MessageBox]::Show("$successCount de $total juegos activados correctamente ($modeNum).","Listo","OK","Information")
         } else { throw "No se pudo activar ningun juego.`n$($errors -join '; ')" }
     } catch {
         Write-ErrorLog "Canjeo" $_; $lblR.ForeColor=$script:Red
