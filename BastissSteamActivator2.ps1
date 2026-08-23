@@ -10,7 +10,7 @@ $ProgressPreference = 'SilentlyContinue'
 $script:singleMutex = $null
 try {
     $script:singleMutex = New-Object System.Threading.Mutex($false, "Local\BastissSteamActivatorMutex")
-    if (-not $script:singleMutex.WaitOne(0)) { exit }
+    if (-not $script:singleMutex.WaitOne(0)) { Write-Host "Ya hay otro BastissSteam Activador corriendo." -ForegroundColor Yellow; return }
 } catch {}
 # ---- Trampa global: ningun error muestra dialogo, solo se registra ----
 trap {
@@ -41,7 +41,7 @@ try { $cw = [DwmHelper]::GetConsoleWindow(); if ($cw -ne [IntPtr]::Zero) { [DwmH
 # ---- Unica instancia: si ya hay una abierta, salir ----
 try {
     $script:siMutex = New-Object System.Threading.Mutex($false, 'BastissSteamActivator2_SI')
-    if (-not $script:siMutex.WaitOne(0)) { exit }
+    if (-not $script:siMutex.WaitOne(0)) { Write-Host "Ya hay otra instancia del activador abierta." -ForegroundColor Yellow; return }
 } catch {}
 
 function New-BufferedPanel {
