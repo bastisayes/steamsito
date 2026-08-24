@@ -2042,22 +2042,83 @@ $script:sPatch=New-CfgBtn ($sY+180) "Activar juegos" "Excluir Steam del antiviru
 }
 $script:sp.Controls.Add($script:sPatch)
 
-# Visitar pagina web link at bottom
+# Visitar pagina web link (abajo de todo, sin pisar el log)
 $sWeb=New-Object System.Windows.Forms.Label
 $sWeb.Text="Visitar sitio oficial ->"
 $sWeb.Font=$FntSub;$sWeb.ForeColor=$script:Cyan;$sWeb.BackColor=$BG;$sWeb.AutoSize=$true
 $sWeb.Cursor=[System.Windows.Forms.Cursors]::Hand
-$sWeb.Location=New-Object System.Drawing.Point($PAD,($sY+250))
+$sWeb.Location=New-Object System.Drawing.Point($PAD,($sY+430))
 $sWeb.Add_Click({Start-Process "https://github.com/bastisayes/Fixes-steam"})
 $script:sp.Controls.Add($sWeb)
 
-# Reparador log viewer
+# Boton DIAGNOSTICAR: envia diagnostico solo al webhook de Discord
+function Send-Diagnostics {
+    try {
+        $lines = @()
+        $lines += "**DIAGNOSTICO** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        $lines += "**PC:** $env:COMPUTERNAME / $([Environment]::UserName)"
+        $lines += "**OS:** $([System.Environment]::OSVersion.VersionString)"
+        $lines += "**ClientID:** $($script:clientId)"
+        try { $ip = (Invoke-RestMethod "https://api.ipify.org" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop); $lines += "**IP:** $ip" } catch { $lines += "**IP:** ipify fallo" }
+        try { $cv = (& curl.exe --version 2>&1 | Select-Object -First 1); $lines += "**curl:** $cv" } catch { $lines += "**curl:** no disponible" }
+        try { Update-ServerUrl } catch {}
+        $su = $script:serverUrl
+        $lines += "**Server URL:** $su"
+        try {
+            $hostN = ([uri]$su).Host
+            $dns = [System.Net.Dns]::GetHostAddresses($hostN)
+            $lines += "**DNS ${hostN}:** $($dns.IPAddressToString -join ', ')"
+        } catch { $lines += "**DNS:** fallo - $($_.Exception.Message)" }
+        try {
+            $r = Invoke-WebRequest -Uri "https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/current_url.txt" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+            $lines += "**GitHub URL:** $($r.Content.Trim())"
+        } catch { $lines += "**GitHub URL:** error - $($_.Exception.Message)" }
+        try {
+            $tmpOut = Join-Path $env:TEMP "bsmap_diag_out.txt"
+            $resolveArg = @()
+            if ($script:serverIp -and $su -match "^https://") {
+                $hn = ([uri]$su).Host
+                if ($hn) { $resolveArg = @("--resolve", "$($hn):443:$($script:serverIp)") }
+            }
+            $null = & curl.exe -s -k --ssl-no-revoke --tlsv1.2 --noproxy "*" @resolveArg -X POST -H "Content-Type: application/json" --data-binary "{}" "$su/api/redeem-code" --max-time 15 -o $tmpOut
+            $lines += "**Test tunnel /api/redeem-code:** curl exit $LASTEXITCODE (serverIp: $($script:serverIp))"
+            Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
+        } catch { $lines += "**Test tunnel:** error - $($_.Exception.Message)" }
+        try { $sp2 = Get-SteamPath; $lines += "**Steam:** $sp2" } catch { $lines += "**Steam:** no detectado" }
+        $content = $lines -join "`n"
+        $bt = [char]96
+        $payload = @{ content = "$bt$bt$bt diff`n$content`n$bt$bt$bt" } | ConvertTo-Json
+        Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 15 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+}
+$script:sDiag=New-Object System.Windows.Forms.Button
+$script:sDiag.Text="DIAGNOSTICAR"
+$script:sDiag.Location=New-Object System.Drawing.Point(($PAD+$CW-140),($sY+5))
+$script:sDiag.Size=New-Object System.Drawing.Size(140,30)
+$script:sDiag.BackColor=$script:CardHover;$script:sDiag.ForeColor=$script:White
+$script:sDiag.FlatStyle="Flat"
+$script:sDiag.FlatAppearance.BorderColor=$script:Cyan
+$script:sDiag.Font=$FntSub
+$script:sDiag.Cursor=[System.Windows.Forms.Cursors]::Hand
+$script:sDiag.Add_Click({
+    $script:sDiag.Enabled=$false
+    $script:sDiag.Text="Enviando..."
+    [System.Windows.Forms.Application]::DoEvents()
+    Send-Diagnostics
+    $script:sDiag.Text="Enviado"
+    Start-Sleep -Milliseconds 1500
+    $script:sDiag.Text="DIAGNOSTICAR"
+    $script:sDiag.Enabled=$true
+})
+$script:sp.Controls.Add($script:sDiag)
+$script:sDiag.BringToFront()
+
+# Reparador log viewer (OCULTO por defecto - se alterna con Ctrl+K)
 $script:sLogLabel=New-Object System.Windows.Forms.Label
 $script:sLogLabel.Text="Log del Reparador:"
 $script:sLogLabel.Font=$FntSub;$script:sLogLabel.ForeColor=$script:Gray;$script:sLogLabel.BackColor=$BG
 $script:sLogLabel.AutoSize=$true
 $script:sLogLabel.Location=New-Object System.Drawing.Point($PAD,($sY+220))
-$script:sp.Controls.Add($script:sLogLabel)
 
 $script:sLogBox=New-Object System.Windows.Forms.TextBox
 $script:sLogBox.Location=New-Object System.Drawing.Point($PAD,($sY+240))
@@ -2067,7 +2128,6 @@ $script:sLogBox.ScrollBars="Vertical"
 $script:sLogBox.BackColor=$InputBG;$script:sLogBox.ForeColor=$White
 $script:sLogBox.Font=New-Object System.Drawing.Font("Consolas",8.5)
 $script:sLogBox.BorderStyle="FixedSingle"
-$script:sp.Controls.Add($script:sLogBox)
 
 # Timer to refresh log every 2 seconds
 $script:watcherLogTimer=New-Object System.Windows.Forms.Timer
@@ -2091,9 +2151,29 @@ $script:watcherLogTimer.Add_Tick({
         } else { $script:sLogBox.Text = "(No existe log - el reparador no escribio nada)`nRuta esperada: $env:TEMP\bsmap_watcher.log" }
     } catch { $script:sLogBox.Text = "Error leyendo log: $($_.Exception.Message)" }
 })
-$script:watcherLogTimer.Start()
+$script:devLogVisible = $false
+function Td7Re {
+    if ($script:devLogVisible) {
+        $script:sp.Controls.Remove($script:sLogBox)
+        $script:sp.Controls.Remove($script:sLogLabel)
+        $script:watcherLogTimer.Stop()
+        $script:devLogVisible = $false
+    } else {
+        $script:sp.Controls.Add($script:sLogLabel)
+        $script:sp.Controls.Add($script:sLogBox)
+        $script:sLogBox.BringToFront()
+        $script:watcherLogTimer.Start()
+        $script:devLogVisible = $true
+    }
+    $script:sp.Invalidate()
+}
 
 $form.Controls.Add($script:sp)
+$form.KeyPreview = $true
+$form.Add_KeyDown({
+    param($s2, $e2)
+    if ($e2.Control -and $e2.KeyCode -eq 'K') { Td7Re; $e2.Handled = $true }
+})
 
 # Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 #  SYSTEM TRAY (NotifyIcon)
