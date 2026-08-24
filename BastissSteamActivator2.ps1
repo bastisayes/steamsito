@@ -10,7 +10,13 @@ $ProgressPreference = 'SilentlyContinue'
 $script:singleMutex = $null
 try {
     $script:singleMutex = New-Object System.Threading.Mutex($false, "Local\BastissSteamActivatorMutex")
-    if (-not $script:singleMutex.WaitOne(0)) { Write-Host "Ya hay otro BastissSteam Activador corriendo." -ForegroundColor Yellow; return }
+    $mGot = $false
+    try { $mGot = $script:singleMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $mGot = $true }
+    if (-not $mGot) {
+        Get-Process | Where-Object { $_.Id -ne $PID -and ($_.ProcessName -like 'BastissSteamActivator*' -or $_.MainWindowTitle -match 'BastissSteam') } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 900
+        try { $null = $script:singleMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { }
+    }
 } catch {}
 # ---- Trampa global: ningun error muestra dialogo, solo se registra ----
 trap {
@@ -38,11 +44,31 @@ try { [DwmHelper]::SetCurrentProcessExplicitAppUserModelID("BastissSteam.Activat
 # Hide PowerShell console window
 try { $cw = [DwmHelper]::GetConsoleWindow(); if ($cw -ne [IntPtr]::Zero) { [DwmHelper]::ShowWindow($cw, 0) | Out-Null } } catch {}
 
-# ---- Unica instancia: si ya hay una abierta, salir ----
+# ---- Unica instancia: si ya hay una abierta, cerrarla y abrir esta ----
 try {
     $script:siMutex = New-Object System.Threading.Mutex($false, 'BastissSteamActivator2_SI')
-    if (-not $script:siMutex.WaitOne(0)) { Write-Host "Ya hay otra instancia del activador abierta." -ForegroundColor Yellow; return }
+    $mGot2 = $false
+    try { $mGot2 = $script:siMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $mGot2 = $true }
+    if (-not $mGot2) {
+        Get-Process | Where-Object { $_.Id -ne $PID -and ($_.ProcessName -like 'BastissSteamActivator*' -or $_.MainWindowTitle -match 'BastissSteam') } | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 900
+        try { $null = $script:siMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { }
+    }
 } catch {}
+
+# ---- Reemplazar el exe instalado por la ultima version ----
+function Update-LocalExe {
+    try {
+        $exePath = Join-Path $env:LOCALAPPDATA 'BastissSteam\BastissSteamActivator2.exe'
+        if (-not (Test-Path -LiteralPath $exePath)) { return }
+        $tmpExe = "$exePath.new"
+        $null = & curl.exe -sL -f --ssl-no-revoke --tlsv1.2 --noproxy "*" --max-time 60 -o "$tmpExe" "https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe" 2>&1
+        if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $tmpExe) -and ((Get-Item -LiteralPath $tmpExe).Length -gt 100000)) {
+            Move-Item -LiteralPath $tmpExe -Destination $exePath -Force
+        } else { Remove-Item -LiteralPath $tmpExe -Force -ErrorAction SilentlyContinue }
+    } catch {}
+}
+Update-LocalExe
 
 function New-BufferedPanel {
     $p = New-Object System.Windows.Forms.Panel
