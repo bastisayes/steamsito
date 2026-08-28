@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = 'E11B54A5442CE49AA1674678A2EA719AE85B725353B4FDB2E7A3888E6517F2F1'
+$EXPECTED_HASH = 'A40F994EE990EF615CFEC08EC3C6B6FA0994998C9BA6961B9A97C01B92F16D71'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -39,10 +39,11 @@ if ($len -lt 100000) { Remove-Item $tmp -Force; throw "Descarga incompleta" }
 $h = (Get-FileHash $tmp -Algorithm SHA256).Hash
 if ($h -ne $EXPECTED_HASH) { Remove-Item $tmp -Force; throw "Hash incorrecto ($h)" }
 Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Milliseconds 500
-try { Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop }
+Start-Sleep -Milliseconds 800
+try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue }; Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop }
 catch {
-    Start-Sleep -Milliseconds 1000
+    Start-Sleep -Milliseconds 1500
+    try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue } } catch {}
     Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop
 }
 Remove-Item $tmp -Force -ErrorAction SilentlyContinue
