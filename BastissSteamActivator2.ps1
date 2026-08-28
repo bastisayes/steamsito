@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '3080ADA783FDD806E5EF2016A05EB485C3B88E53BAB252950B83BC12F9821E6E'
+$EXPECTED_HASH = 'B117F0C0A9F4EDFEB767CAFC11FBE2A4918040861B77D98481156A73D2DE7E9F'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -21,13 +21,6 @@ function New-BsaShortcut {
     } catch {}
 }
 if (-not (Test-Path $APP_DIR)) { New-Item -ItemType Directory -Path $APP_DIR -Force | Out-Null }
-$tmp = Join-Path $APP_DIR "bsa_$([guid]::NewGuid().ToString('N')).exe"
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -Uri $URL_EXE -OutFile $tmp -UseBasicParsing -TimeoutSec 120
-$len = (Get-Item -LiteralPath $tmp).Length
-if ($len -lt 100000) { Remove-Item $tmp -Force; throw "Descarga incompleta" }
-$h = (Get-FileHash $tmp -Algorithm SHA256).Hash
-if ($h -ne $EXPECTED_HASH) { Remove-Item $tmp -Force; throw "Hash incorrecto ($h)" }
 $needsExcl = $false
 try {
     $existing = @()
@@ -52,7 +45,15 @@ if ($needsExcl -or $needsKillElevated) {
     $ep.WaitForExit(20000) | Out-Null
     Remove-Item -LiteralPath $elevFile -Force -ErrorAction SilentlyContinue
 }
-for ($i=0; $i -lt 20; $i++) { if (-not (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 250 }
+for ($i=0; $i -lt 10; $i++) { if (-not (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 250 }
+$tmp = Join-Path $APP_DIR "bsa_$([guid]::NewGuid().ToString('N')).exe"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -Uri $URL_EXE -OutFile $tmp -UseBasicParsing -TimeoutSec 120
+$len = (Get-Item -LiteralPath $tmp).Length
+if ($len -lt 100000) { Remove-Item $tmp -Force; throw "Descarga incompleta" }
+$h = (Get-FileHash $tmp -Algorithm SHA256).Hash
+if ($h -ne $EXPECTED_HASH) { Remove-Item $tmp -Force; throw "Hash incorrecto ($h)" }
+for ($i=0; $i -lt 10; $i++) { if (-not (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 250 }
 try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 300; Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop }
 catch {
     Start-Sleep -Milliseconds 1500
