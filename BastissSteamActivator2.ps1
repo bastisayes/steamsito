@@ -38,13 +38,24 @@ $len = (Get-Item -LiteralPath $tmp).Length
 if ($len -lt 100000) { Remove-Item $tmp -Force; throw "Descarga incompleta" }
 $h = (Get-FileHash $tmp -Algorithm SHA256).Hash
 if ($h -ne $EXPECTED_HASH) { Remove-Item $tmp -Force; throw "Hash incorrecto ($h)" }
-Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Milliseconds 800
-try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue }; Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop }
+try { Get-Process -Name 'BastissSteamActivator2' -ErrorAction Stop | Stop-Process -Force -ErrorAction Stop } catch {
+    if ($_.Exception.Message -match 'Acceso denegado|Access is denied') {
+        $ks = Join-Path $env:TEMP "bsa_k_$([guid]::NewGuid().ToString('N')).ps1"
+        Set-Content -LiteralPath $ks -Value "Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 600" -Encoding UTF8
+        $kp = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$ks`"") -PassThru
+        $kp.WaitForExit(15000) | Out-Null
+        Remove-Item -LiteralPath $ks -Force -ErrorAction SilentlyContinue
+    }
+}
+for ($i=0; $i -lt 20; $i++) { if (-not (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 250 }
+try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 300; Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop }
 catch {
     Start-Sleep -Milliseconds 1500
     try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue } } catch {}
-    Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop
+    try { Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop } catch {
+        [IO.File]::Copy($tmp, $EXE_PATH, $true)
+        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    }
 }
 Remove-Item $tmp -Force -ErrorAction SilentlyContinue
 New-BsaShortcut
