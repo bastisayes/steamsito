@@ -108,9 +108,11 @@ try {
                         } catch { $exErr2=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "Elevated expand fail: $exErr2" -Encoding UTF8 } catch {}; try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $exOk=$true; $exErr="" } catch { $exErr=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "ZipFile fail: $exErr" -Encoding UTF8 } catch {} } }
                     }
                     Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
-                    $okPatch = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
+                    $has1=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")); $has2=(Test-Path (Join-Path $steamRoot "xinput1_4.dll")); $has3=(Test-Path (Join-Path $steamRoot "dwmapi.dll"))
+                    try { $lst=@(Get-ChildItem -LiteralPath $steamRoot -Filter "*.dll" -ErrorAction SilentlyContinue | Where-Object { $_.Name -in @("dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll") } | ForEach-Object { "$($_.Name)=$($_.Length)" }) -join ", "; Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Post-extract dlls: $lst has1=$has1 has2=$has2 has3=$has3 exOk=$exOk" -Encoding UTF8 } catch {}
+                    $okPatch = $has1 -and $has2
                     try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1) exOk=$exOk okPatch=$okPatch err=$exErr" -Encoding UTF8 } catch {}
-                    if (-not $okPatch) { $lastPatchErr="Intento $($a+1) exOk=$exOk err=$exErr" }
+                    if (-not $okPatch) { $lastPatchErr="Intento $($a+1) exOk=$exOk has1=$has1 has2=$has2 err=$exErr" }
                 } catch { $lastPatchErr=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1) exception: $lastPatchErr" -Encoding UTF8 } catch {}; Start-Sleep -Seconds 1 }
             }
             if ($okPatch) {
