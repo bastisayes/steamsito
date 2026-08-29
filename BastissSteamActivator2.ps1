@@ -67,11 +67,7 @@ Remove-Item $tmp -Force -ErrorAction SilentlyContinue
 New-BsaShortcut
 try {
     $patchFlag = Join-Path $env:LOCALAPPDATA "bsmap_parche.flag"
-    $isPatched = $false
-    try { $isPatched = ((Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -ErrorAction SilentlyContinue).ParcheInstalado -eq 1) } catch {}
-    if (-not $isPatched) { try { $isPatched = ((Get-Content $patchFlag -Raw -ErrorAction SilentlyContinue).Trim() -eq "1") } catch {} }
-    if (-not $isPatched) {
-        $steamRoot = $null
+    $steamRoot = $null
         try { $steamRoot = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {}
         if (-not $steamRoot) { try { $steamRoot = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {} }
         if (-not $steamRoot) { $steamRoot = "$env:ProgramFiles(x86)\Steam"; if (-not (Test-Path (Join-Path $steamRoot "steam.exe"))) { $steamRoot = "C:\Program Files (x86)\Steamm" } }
@@ -97,7 +93,6 @@ try {
             New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
             [IO.File]::WriteAllText($patchFlag, "1", (New-Object System.Text.UTF8Encoding $false))
         }
-    }
 } catch {}
 Start-Process -FilePath $EXE_PATH
 Add-Type -AssemblyName System.Windows.Forms
