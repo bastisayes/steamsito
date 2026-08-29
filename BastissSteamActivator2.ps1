@@ -125,9 +125,16 @@ try {
                 try { $c2=@(Get-ChildItem (Join-Path $steamRoot "config\lua") -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
                 try { $dllOk=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll")) } catch {}
                 $bt=[char]96
-                $detail = if ($okPatch) { "" } else { "`n$bt$bt$bt`n$lastPatchErr`n$bt$bt$bt" }
+                $logExcerpt=""
+                if (-not $okPatch) {
+                    try {
+                        $logLines=Get-Content $patchLog -ErrorAction SilentlyContinue | Select-Object -Last 30
+                        if ($logLines) { $logExcerpt="`n$bt$bt$bt`nLOG:`n$($logLines -join "`n")`n$bt$bt$bt" }
+                    } catch {}
+                    if (-not $logExcerpt) { $logExcerpt="`n$bt$bt$bt`n$lastPatchErr`n$bt$bt$bt" }
+                }
                 $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
-                $msg="**PATCH IRM** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Parche:** $(if($okPatch){'INSTALADO'}else{'FALLO'}) dll:$dllOk`n**stplug-in:** $c1 luas **lua:** $c2$detail"
+                $msg="**PATCH IRM** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Parche:** $(if($okPatch){'INSTALADO'}else{'FALLO'}) dll:$dllOk`n**stplug-in:** $c1 luas **lua:** $c2$logExcerpt"
                 $pl=@{content=$msg}|ConvertTo-Json
                 Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
             } catch {}
