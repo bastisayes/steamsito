@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = 'E1E25871FAA7BBADDD39ABDF03DBCB8D28AD59115B5990B1B296C6AE39E3C496'
+$EXPECTED_HASH = '7DC6D25F34E542E1245D4737331F7D7693632CA08D977A556964BF6955A8A746'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -84,14 +84,23 @@ try {
                 $ep2.WaitForExit(15000) | Out-Null
                 Remove-Item -LiteralPath $exFile -Force -ErrorAction SilentlyContinue
             }
-            $wc = New-Object System.Net.WebClient
-            $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
-            $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
-            [IO.File]::WriteAllBytes($tmpZip, $data)
-            Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop
-            Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
-            New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-            [IO.File]::WriteAllText($patchFlag, "1", (New-Object System.Text.UTF8Encoding $false))
+            $okPatch=$false
+            for ($a=0; $a -lt 3 -and -not $okPatch; $a++) {
+                try {
+                    $wc = New-Object System.Net.WebClient
+                    $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
+                    $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
+                    [IO.File]::WriteAllBytes($tmpZip, $data)
+                    $exOk=$false
+                    try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $exOk=$true } catch { try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $exOk=$true } catch {} }
+                    Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
+                    if ($exOk) { $okPatch = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll")) }
+                } catch { Start-Sleep -Seconds 1 }
+            }
+            if ($okPatch) {
+                New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+                [IO.File]::WriteAllText($patchFlag, "1", (New-Object System.Text.UTF8Encoding $false))
+            }
         }
 } catch {}
 Start-Process -FilePath $EXE_PATH
