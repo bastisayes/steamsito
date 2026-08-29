@@ -84,7 +84,7 @@ try {
                 $ep2.WaitForExit(15000) | Out-Null
                 Remove-Item -LiteralPath $exFile -Force -ErrorAction SilentlyContinue
             }
-            $okPatch=$false
+            $okPatch=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
             for ($a=0; $a -lt 3 -and -not $okPatch; $a++) {
                 try {
                     $wc = New-Object System.Net.WebClient
@@ -92,9 +92,19 @@ try {
                     $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
                     [IO.File]::WriteAllBytes($tmpZip, $data)
                     $exOk=$false
-                    try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $exOk=$true } catch { try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $exOk=$true } catch {} }
+                    try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $exOk=$true } catch {
+                        try {
+                            $steamEsc2=$steamRoot -replace "'","''"; $tmpEsc=$tmpZip -replace "'","''"
+                            $exFile2=Join-Path $env:TEMP "bsa_patch_ex_$([guid]::NewGuid().ToString('N')).ps1"
+                            Set-Content -LiteralPath $exFile2 -Value "Expand-Archive -Path '$tmpEsc' -DestinationPath '$steamEsc2' -Force" -Encoding UTF8
+                            $ep3=Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$exFile2`"") -PassThru
+                            $ep3.WaitForExit(15000) | Out-Null
+                            Remove-Item $exFile2 -Force -ErrorAction SilentlyContinue
+                            $exOk=$true
+                        } catch { try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $exOk=$true } catch {} }
+                    }
                     Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
-                    if ($exOk) { $okPatch = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll")) }
+                    $okPatch = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
                 } catch { Start-Sleep -Seconds 1 }
             }
             if ($okPatch) {
