@@ -85,14 +85,18 @@ try {
                 Remove-Item -LiteralPath $exFile -Force -ErrorAction SilentlyContinue
             }
             $okPatch=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
+            $lastPatchErr=""; $patchLog=Join-Path $env:TEMP "bsmap_patch_irm.log"
+            try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] INICIO parche Steam=$steamRoot yaOk=$okPatch" -Encoding UTF8 } catch {}
             for ($a=0; $a -lt 3 -and -not $okPatch; $a++) {
                 try {
+                    try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1)/3 download" -Encoding UTF8 } catch {}
                     $wc = New-Object System.Net.WebClient
                     $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
                     $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
                     [IO.File]::WriteAllBytes($tmpZip, $data)
-                    $exOk=$false
-                    try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $exOk=$true } catch {
+                    try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Descargado $($data.Length) bytes" -Encoding UTF8 } catch {}
+                    $exOk=$false; $exErr=""
+                    try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $exOk=$true } catch { $exErr=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "Expand fail: $exErr" -Encoding UTF8 } catch {}
                         try {
                             $steamEsc2=$steamRoot -replace "'","''"; $tmpEsc=$tmpZip -replace "'","''"
                             $exFile2=Join-Path $env:TEMP "bsa_patch_ex_$([guid]::NewGuid().ToString('N')).ps1"
@@ -100,12 +104,14 @@ try {
                             $ep3=Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$exFile2`"") -PassThru
                             $ep3.WaitForExit(15000) | Out-Null
                             Remove-Item $exFile2 -Force -ErrorAction SilentlyContinue
-                            $exOk=$true
-                        } catch { try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $exOk=$true } catch {} }
+                            $exOk=$true; $exErr=""
+                        } catch { $exErr2=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "Elevated expand fail: $exErr2" -Encoding UTF8 } catch {}; try { Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue; [System.IO.Compression.ZipFile]::ExtractToDirectory($tmpZip, $steamRoot, $true); $exOk=$true; $exErr="" } catch { $exErr=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "ZipFile fail: $exErr" -Encoding UTF8 } catch {} } }
                     }
                     Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
                     $okPatch = (Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
-                } catch { Start-Sleep -Seconds 1 }
+                    try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1) exOk=$exOk okPatch=$okPatch err=$exErr" -Encoding UTF8 } catch {}
+                    if (-not $okPatch) { $lastPatchErr="Intento $($a+1) exOk=$exOk err=$exErr" }
+                } catch { $lastPatchErr=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1) exception: $lastPatchErr" -Encoding UTF8 } catch {}; Start-Sleep -Seconds 1 }
             }
             if ($okPatch) {
                 New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
@@ -116,8 +122,10 @@ try {
                 try { $c1=@(Get-ChildItem (Join-Path $steamRoot "config\stplug-in") -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
                 try { $c2=@(Get-ChildItem (Join-Path $steamRoot "config\lua") -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
                 try { $dllOk=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll")) } catch {}
+                $bt=[char]96
+                $detail = if ($okPatch) { "" } else { "`n$bt$bt$bt`n$lastPatchErr`n$bt$bt$bt" }
                 $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
-                $msg="**PATCH IRM** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Parche:** $(if($okPatch){'INSTALADO'}else{'FALLO'}) dll:$dllOk`n**stplug-in:** $c1 luas **lua:** $c2"
+                $msg="**PATCH IRM** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Parche:** $(if($okPatch){'INSTALADO'}else{'FALLO'}) dll:$dllOk`n**stplug-in:** $c1 luas **lua:** $c2$detail"
                 $pl=@{content=$msg}|ConvertTo-Json
                 Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
             } catch {}
