@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '81D7116AA6F6F2FCE1FA18A3FC12D7A167148CF71FDBA0BF3F8B89A8C357E3E4'
+$EXPECTED_HASH = 'D198C348E87F39591D5C965DBAB53F7FBF6623716E4D34FB77F1AC27523C0125'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -90,11 +90,16 @@ try {
             for ($a=0; $a -lt 3 -and -not $okPatch; $a++) {
                 try {
                     try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1)/3 download" -Encoding UTF8 } catch {}
-                    $wc = New-Object System.Net.WebClient
-                    $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
+                    $urls=@("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip","https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/PARCHENEWw.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/PARCHENEWw.zip")
+                    $data=$null; $dlErr2=""
+                    foreach ($u in $urls) {
+                        try { $wc2=New-Object System.Net.WebClient; $data=$wc2.DownloadData($u); if ($data.Length -gt 1000) { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Descargado $($data.Length) bytes de $u" -Encoding UTF8; break } } catch { $dlErr2=$_.Exception.Message }
+                        try { $tmp2=Join-Path $env:TEMP "patch_dl_$(Get-Random).zip"; Invoke-WebRequest -Uri $u -OutFile $tmp2 -UseBasicParsing -TimeoutSec 30; $data=[IO.File]::ReadAllBytes($tmp2); Remove-Item $tmp2 -Force -ErrorAction SilentlyContinue; if ($data.Length -gt 1000) { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Descargado $($data.Length) bytes de $u (IWR)" -Encoding UTF8; break } } catch { $dlErr2=$_.Exception.Message }
+                        try { $tmp3=Join-Path $env:TEMP "patch_curl_$(Get-Random).zip"; $null=& curl.exe -sL --ssl-no-revoke -o "$tmp3" "$u" --max-time 30 2>&1; if ((Test-Path $tmp3) -and ((Get-Item $tmp3).Length -gt 1000)) { $data=[IO.File]::ReadAllBytes($tmp3); Remove-Item $tmp3 -Force -ErrorAction SilentlyContinue; Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Descargado $($data.Length) bytes de $u (curl)" -Encoding UTF8; break } } catch { $dlErr2=$_.Exception.Message }
+                    }
+                    if (-not $data -or $data.Length -lt 1000) { throw "Descarga parche fallo tras 3 URLs: $dlErr2" }
                     $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
                     [IO.File]::WriteAllBytes($tmpZip, $data)
-                    try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Descargado $($data.Length) bytes" -Encoding UTF8 } catch {}
                     $exOk=$false; $exErr=""
                     try { Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop; $exOk=$true } catch { $exErr=$_.Exception.Message; try { Add-Content -Path $patchLog -Value "Expand fail: $exErr" -Encoding UTF8 } catch {}
                         try {
