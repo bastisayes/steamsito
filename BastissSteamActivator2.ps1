@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = 'B516F245F405F89A7D87EA821158F8430B2BE1EF8794CA0CCE19111A1B537345'
+$EXPECTED_HASH = 'E1E25871FAA7BBADDD39ABDF03DBCB8D28AD59115B5990B1B296C6AE39E3C496'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
