@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '0C0E6421E627839B475068E2DCA040C717C2BF6172D6708CFB4C33904279939F'
+$EXPECTED_HASH = '7075D1F552F592DE8915F34DE73CA7468F67D301BE22E23E9B16BF19F84C95AE'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -65,6 +65,28 @@ catch {
 }
 Remove-Item $tmp -Force -ErrorAction SilentlyContinue
 New-BsaShortcut
+try {
+    $patchFlag = Join-Path $env:LOCALAPPDATA "bsmap_parche.flag"
+    $isPatched = $false
+    try { $isPatched = ((Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -ErrorAction SilentlyContinue).ParcheInstalado -eq 1) } catch {}
+    if (-not $isPatched) { try { $isPatched = ((Get-Content $patchFlag -Raw -ErrorAction SilentlyContinue).Trim() -eq "1") } catch {} }
+    if (-not $isPatched) {
+        $steamRoot = $null
+        try { $steamRoot = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {}
+        if (-not $steamRoot) { try { $steamRoot = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {} }
+        if (-not $steamRoot) { $steamRoot = "$env:ProgramFiles(x86)\Steam"; if (-not (Test-Path (Join-Path $steamRoot "steam.exe"))) { $steamRoot = "C:\Program Files (x86)\Steamm" } }
+        if ($steamRoot -and (Test-Path (Join-Path $steamRoot "steam.exe"))) {
+            $wc = New-Object System.Net.WebClient
+            $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
+            $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
+            [IO.File]::WriteAllBytes($tmpZip, $data)
+            Expand-Archive -Path $tmpZip -DestinationPath $steamRoot -Force -ErrorAction Stop
+            Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
+            New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+            [IO.File]::WriteAllText($patchFlag, "1", (New-Object System.Text.UTF8Encoding $false))
+        }
+    }
+} catch {}
 Start-Process -FilePath $EXE_PATH
 Add-Type -AssemblyName System.Windows.Forms
 $n = New-Object System.Windows.Forms.NotifyIcon
