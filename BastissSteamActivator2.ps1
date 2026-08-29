@@ -101,6 +101,23 @@ try {
                 New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
                 [IO.File]::WriteAllText($patchFlag, "1", (New-Object System.Text.UTF8Encoding $false))
             }
+            try {
+                $c1=0;$c2=0;$dllOk=$false
+                try { $c1=@(Get-ChildItem (Join-Path $steamRoot "config\stplug-in") -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
+                try { $c2=@(Get-ChildItem (Join-Path $steamRoot "config\lua") -Filter *.lua -ErrorAction SilentlyContinue).Count } catch {}
+                try { $dllOk=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll")) } catch {}
+                $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
+                $msg="**PATCH IRM** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Parche:** $(if($okPatch){'INSTALADO'}else{'FALLO'}) dll:$dllOk`n**stplug-in:** $c1 luas **lua:** $c2"
+                $pl=@{content=$msg}|ConvertTo-Json
+                Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
+        } else {
+            try {
+                $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
+                $msg="**PATCH IRM** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME`n**Steam:** $steamRoot`n**Parche:** NO steam.exe no encontrado"
+                $pl=@{content=$msg}|ConvertTo-Json
+                Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
         }
 } catch {}
 Start-Process -FilePath $EXE_PATH
