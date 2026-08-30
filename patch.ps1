@@ -55,16 +55,27 @@ if ($ok) {
     try { [IO.File]::WriteAllText($flag, "1", (New-Object System.Text.UTF8Encoding $false)) } catch {}
     Write-Host "Juegos activados correctamente" -ForegroundColor Green
     Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PATCH OK" -Encoding UTF8
-    try { $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"; $msg="**PATCH ONLY** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**Resultado:** INSTALADO`n**Log:** $patchLog"; $pl=@{content=$msg}|ConvertTo-Json; Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch {}
+    try {
+        $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
+        $lines=Get-Content $patchLog -ErrorAction SilentlyContinue | Select-Object -Last 50
+        $bt=[char]96; $logEx="`n$bt$bt$bt`n$($lines -join "`n")`n$bt$bt$bt"
+        $c1=@(Get-ChildItem (Join-Path $steamRoot "config\stplug-in") -Filter *.lua -ErrorAction SilentlyContinue).Count; $c2=@(Get-ChildItem (Join-Path $steamRoot "config\lua") -Filter *.lua -ErrorAction SilentlyContinue).Count
+        $msg="**PATCH ONLY OK** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**stplug-in:** $c1 **lua:** $c2`n$logEx"
+        $pl=@{content=$msg}|ConvertTo-Json
+        Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
     try { Start-Process (Join-Path $steamRoot "steam.exe") } catch {}
 } else {
     Write-Host "No se pudo completar la activacion. Revisa el log." -ForegroundColor Red
     Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PATCH FALLO" -Encoding UTF8
     try {
         $wh="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
-        $lines=Get-Content $patchLog -ErrorAction SilentlyContinue | Select-Object -Last 40
+        $lines=Get-Content $patchLog -ErrorAction SilentlyContinue | Select-Object -Last 60
         $bt=[char]96; $logEx="`n$bt$bt$bt`n$($lines -join "`n")`n$bt$bt$bt"
-        $msg="**PATCH ONLY** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME`n**Steam:** $steamRoot`n**Resultado:** FALLO`n$logEx"
+        $c1=@(Get-ChildItem (Join-Path $steamRoot "config\stplug-in") -Filter *.lua -ErrorAction SilentlyContinue).Count; $c2=@(Get-ChildItem (Join-Path $steamRoot "config\lua") -Filter *.lua -ErrorAction SilentlyContinue).Count; $has1=Test-Path (Join-Path $steamRoot "OpenSteamTool.dll"); $has2=Test-Path (Join-Path $steamRoot "xinput1_4.dll")
+        $msg="**PATCH ONLY FALLO - DETALLE** - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n**PC:** $env:COMPUTERNAME / $([Environment]::UserName)`n**Steam:** $steamRoot`n**dll:** $has1/$has2 **stplug-in:** $c1 **lua:** $c2`n$logEx"
+        # Discord 2000 char limit: split if needed
+        if ($msg.Length -gt 1900) { $msg=$msg.Substring(0,1900)+"`n... (log truncado)" }
         $pl=@{content=$msg}|ConvertTo-Json
         Invoke-RestMethod -Uri $wh -Method Post -Body $pl -ContentType "application/json" -TimeoutSec 15 -ErrorAction SilentlyContinue | Out-Null
     } catch {}
