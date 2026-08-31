@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '3656E4A97F4223DD93CEFB4C6C40A24B916F96E7D365CB51800533D00E302F8F'
+$EXPECTED_HASH = '56A70EB05CD0A7B8B2FD020FEF4629AA38039665CF277630DA503EEB1CE0B2C7'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -21,27 +21,34 @@ function New-BsaShortcut {
     } catch {}
 }
 if (-not (Test-Path $APP_DIR)) { New-Item -ItemType Directory -Path $APP_DIR -Force | Out-Null }
-$needsExcl = $false
+$steamRootPre=$null; try { $steamRootPre=(Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {}
+if (-not $steamRootPre) { try { $steamRootPre=(Get-ItemProperty -Path "HKLM:\SOFTWARE\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {} }
+if (-not $steamRootPre) { $steamRootPre="$env:ProgramFiles(x86)\Steam"; if (-not (Test-Path (Join-Path $steamRootPre "steam.exe"))) { $steamRootPre="C:\Program Files (x86)\Steamm" } }
+$needsExcl=$false; $needsSteamExcl=$false
 try {
-    $existing = @()
-    try { $existing = @((Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath) } catch {}
-    if (-not $existing -or $existing.Count -eq 0) { try { $existing = @((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
-    if ($existing -notcontains $APP_DIR) { $needsExcl = $true }
-    elseif ($existing -notcontains $EXE_PATH) { $needsExcl = $true }
-} catch { $needsExcl = $false }
-$needsKillElevated = $false
-$procs = Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue
+    $existing=@(); try { $existing=@((Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath) } catch {}
+    if (-not $existing -or $existing.Count -eq 0) { try { $existing=@((Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" -ErrorAction SilentlyContinue).PSObject.Properties.Name | Where-Object { $_ -notlike 'PS*' }) } catch {} }
+    if ($existing -notcontains $APP_DIR) { $needsExcl=$true }
+    elseif ($existing -notcontains $EXE_PATH) { $needsExcl=$true }
+    if ($steamRootPre -and (Test-Path (Join-Path $steamRootPre "steam.exe"))) {
+        if ($existing -notcontains $steamRootPre) { $needsSteamExcl=$true }
+        foreach ($sub in @("steamapps\downloading","steamapps\common","config\stplug-in","config\lua","config\depotcache")) { $pp=Join-Path $steamRootPre $sub; if ((Test-Path $pp) -and $existing -notcontains $pp) { $needsSteamExcl=$true; break } }
+    }
+} catch {}
+$needsKillElevated=$false
+$procs=Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue
 if ($procs) {
-    try { $procs | Stop-Process -Force -ErrorAction Stop; Start-Sleep -Milliseconds 500 } catch { if ($_.Exception.Message -match 'Acceso denegado|Access is denied') { $needsKillElevated = $true } }
-    if (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue) { $needsKillElevated = $true }
+    try { $procs | Stop-Process -Force -ErrorAction Stop; Start-Sleep -Milliseconds 500 } catch { if ($_.Exception.Message -match 'Acceso denegado|Access is denied') { $needsKillElevated=$true } }
+    if (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue) { $needsKillElevated=$true }
 }
-if ($needsExcl -or $needsKillElevated) {
-    $elevCmd = ""
-    if ($needsExcl) { $elevCmd += "Add-MpPreference -ExclusionPath '$APP_DIR' -Force; Add-MpPreference -ExclusionPath '$EXE_PATH' -Force; " }
-    if ($needsKillElevated) { $elevCmd += "Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 600; " }
-    $elevFile = Join-Path $env:TEMP "bsa_elev_$([guid]::NewGuid().ToString('N')).ps1"
+if ($needsExcl -or $needsSteamExcl -or $needsKillElevated) {
+    $elevCmd=""
+    if ($needsExcl) { $elevCmd+="Add-MpPreference -ExclusionPath '$APP_DIR' -Force; Add-MpPreference -ExclusionPath '$EXE_PATH' -Force; " }
+    if ($needsSteamExcl -and $steamRootPre) { $elevCmd+="Add-MpPreference -ExclusionPath '$steamRootPre' -Force; foreach (`$s in @('steamapps\downloading','steamapps\common','config\stplug-in','config\lua','config\depotcache')) { `$pp=Join-Path '$steamRootPre' `$s; if (Test-Path `$pp) { Add-MpPreference -ExclusionPath `$pp -Force } } " }
+    if ($needsKillElevated) { $elevCmd+="Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 600; " }
+    $elevFile=Join-Path $env:TEMP "bsa_elev_$([guid]::NewGuid().ToString('N')).ps1"
     Set-Content -LiteralPath $elevFile -Value $elevCmd -Encoding UTF8
-    $ep = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elevFile`"") -PassThru
+    $ep=Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elevFile`"") -PassThru
     $ep.WaitForExit(20000) | Out-Null
     Remove-Item -LiteralPath $elevFile -Force -ErrorAction SilentlyContinue
 }
@@ -72,18 +79,6 @@ try {
         if (-not $steamRoot) { try { $steamRoot = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Valve\Steam" -Name InstallPath -ErrorAction SilentlyContinue).InstallPath } catch {} }
         if (-not $steamRoot) { $steamRoot = "$env:ProgramFiles(x86)\Steam"; if (-not (Test-Path (Join-Path $steamRoot "steam.exe"))) { $steamRoot = "C:\Program Files (x86)\Steamm" } }
         if ($steamRoot -and (Test-Path (Join-Path $steamRoot "steam.exe"))) {
-            try {
-                Add-MpPreference -ExclusionPath $steamRoot -Force -ErrorAction Stop
-                foreach ($sub in @("steamapps\downloading","steamapps\common","config\stplug-in","config\lua","config\depotcache")) { $pp=Join-Path $steamRoot $sub; if (Test-Path $pp) { Add-MpPreference -ExclusionPath $pp -Force -ErrorAction SilentlyContinue } }
-            } catch {
-                $steamEsc = $steamRoot -replace "'","''"
-                $exCmd = "Add-MpPreference -ExclusionPath '$steamEsc' -Force; foreach (`$s in @('steamapps\downloading','steamapps\common','config\stplug-in','config\lua','config\depotcache')) { `$pp=Join-Path '$steamEsc' `$s; if (Test-Path `$pp) { Add-MpPreference -ExclusionPath `$pp -Force } }"
-                $exFile = Join-Path $env:TEMP "bsa_steam_excl_$([guid]::NewGuid().ToString('N')).ps1"
-                Set-Content -LiteralPath $exFile -Value $exCmd -Encoding UTF8
-                $ep2 = Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$exFile`"") -PassThru
-                $ep2.WaitForExit(15000) | Out-Null
-                Remove-Item -LiteralPath $exFile -Force -ErrorAction SilentlyContinue
-            }
             $okPatch=(Test-Path (Join-Path $steamRoot "OpenSteamTool.dll")) -and (Test-Path (Join-Path $steamRoot "xinput1_4.dll"))
             $lastPatchErr=""; $patchLog=Join-Path $env:TEMP "bsmap_patch_irm.log"
             try { Add-Content -Path $patchLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] INICIO parche Steam=$steamRoot yaOk=$okPatch" -Encoding UTF8 } catch {}
