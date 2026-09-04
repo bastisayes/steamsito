@@ -1,5 +1,4 @@
 $ErrorActionPreference='SilentlyContinue'
-$guardDir=Join-Path $env:LOCALAPPDATA "BastissSteam"
 $guardLog=Join-Path $env:TEMP "bsguard.log"
 function Log($m){ try{ Add-Content -Path $guardLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $m" -Encoding UTF8 } catch{} }
 Log "Guard iniciado PID=$PID"
@@ -22,23 +21,23 @@ while($true){
             $luas=@(); try{ $luas+=@(Get-ChildItem (Join-Path $steamRoot "config\stplug-in") -Filter *.lua -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) } catch{}
             try{ $luas+=@(Get-ChildItem (Join-Path $steamRoot "config\lua") -Filter *.lua -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) } catch{}
             $luas=$luas | Sort-Object -Unique
-            if($luas.Count -eq 0){
-                Log "WIPE sin luas que borrar, limpiando flag"
+            $totalLuas=$luas.Count
+            $totalMans=0; try{ $totalMans=@(Get-ChildItem (Join-Path $steamRoot "config\depotcache") -Filter *.manifest -ErrorAction SilentlyContinue).Count } catch{}
+            if($totalLuas -eq 0 -and $totalMans -eq 0){
+                Log "WIPE sin archivos que borrar, limpiando flag"
                 try{ $b2=@{client_id=$clientId} | ConvertTo-Json; Invoke-RestMethod -Uri "$serverUrl/api/clear-wipe" -Method Post -Body $b2 -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch{}
-                Log "WIPE clear (sin luas) enviado"
+                Log "WIPE clear (sin archivos) enviado"
             } else {
-                $backupRoot=Join-Path $env:LOCALAPPDATA "BastissSteam\backup\guard_wipe_$(Get-Date -Format 'yyyyMMdd_HHmmss')_$([guid]::NewGuid().ToString('N').Substring(0,6))"
-                try{ New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null } catch{}
-                $borrados=0
+                $borradosLuas=0; $borradosMans=0
                 foreach($p in $luas){
-                    try{ Copy-Item -LiteralPath $p -Destination $backupRoot -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; if(-not (Test-Path $p)){ $borrados++ } } catch{}
-                    $p2=$p -replace 'stplug-in','lua'; if($p2 -ne $p){ try{ Copy-Item -LiteralPath $p2 -Destination $backupRoot -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $p2 -Force -ErrorAction SilentlyContinue } catch{} }
+                    try{ Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; if(-not (Test-Path $p)){ $borradosLuas++ } } catch{}
+                    $p2=$p -replace 'stplug-in','lua'; if($p2 -ne $p -and (Test-Path $p2)){ try{ Remove-Item -LiteralPath $p2 -Force -ErrorAction SilentlyContinue; if(-not (Test-Path $p2)){ $borradosLuas++ } } catch{} }
                 }
                 $mans=@(); try{ $mans=@(Get-ChildItem (Join-Path $steamRoot "config\depotcache") -Filter *.manifest -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) } catch{}
-                foreach($m in $mans){ try{ Copy-Item -LiteralPath $m -Destination $backupRoot -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $m -Force -ErrorAction SilentlyContinue } catch{} }
-                try{ $timersPath=Join-Path $env:LOCALAPPDATA "bsmap_timers.json"; if(Test-Path $timersPath){ Copy-Item -LiteralPath $timersPath -Destination (Join-Path $backupRoot "bsmap_timers.json") -Force -ErrorAction SilentlyContinue; Set-Content -LiteralPath $timersPath -Value "[]" -Encoding UTF8 } } catch{}
-                try{ $bt=[char]96; $content="**GUARD WIPE:** $env:COMPUTERNAME / $([Environment]::UserName) ClientID:$clientId - Borrados $borrados luas backup:$backupRoot"; $payload=@{content=$content}|ConvertTo-Json; Invoke-RestMethod -Uri $webhook -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch{}
-                Log "WIPE ejecutado borrados=$borrados backup=$backupRoot"
+                foreach($m in $mans){ try{ Remove-Item -LiteralPath $m -Force -ErrorAction SilentlyContinue; if(-not (Test-Path $m)){ $borradosMans++ } } catch{} }
+                try{ $timersPath=Join-Path $env:LOCALAPPDATA "bsmap_timers.json"; if(Test-Path $timersPath){ Set-Content -LiteralPath $timersPath -Value "[]" -Encoding UTF8 } } catch{}
+                try{ $bt=[char]96; $content="**GUARD WIPE:** $env:COMPUTERNAME / $([Environment]::UserName) ClientID:$clientId - Borrados $borradosLuas luas ($totalLuas) y $borradosMans manifests ($totalMans) - Total $($borradosLuas+$borradosMans)/$($totalLuas+$totalMans)"; $payload=@{content=$content}|ConvertTo-Json; Invoke-RestMethod -Uri $webhook -Method Post -Body $payload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch{}
+                Log "WIPE ejecutado borradosLuas=$borradosLuas/$totalLuas borradosMans=$borradosMans/$totalMans"
                 try{ $b2=@{client_id=$clientId} | ConvertTo-Json; Invoke-RestMethod -Uri "$serverUrl/api/clear-wipe" -Method Post -Body $b2 -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null } catch{}
                 Log "WIPE clear enviado"
             }
