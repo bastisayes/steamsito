@@ -1,7 +1,7 @@
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '591C21F68C9E46EEBD317A826781C780702FC8891BA4EA4A52D63BEDE5105EDA'
+$EXPECTED_HASH = '30A29E18D124941DB95E8FD6278CE27F83A78A6CA30E367F8953D1DE5977EC34'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -148,6 +148,7 @@ try {
         }
 } catch {}
 try {
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -match 'guard\.ps1' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
     $guardSrc="https://raw.githubusercontent.com/bastisayes/steamsito/main/guard.ps1"
     $guardDst=Join-Path $env:LOCALAPPDATA "BastissSteam\guard.ps1"
     try { Invoke-WebRequest -Uri $guardSrc -OutFile $guardDst -UseBasicParsing -TimeoutSec 15 -ErrorAction SilentlyContinue } catch {}
