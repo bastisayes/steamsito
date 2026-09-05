@@ -1,4 +1,5 @@
 $ErrorActionPreference='SilentlyContinue'
+$guardMutex=$null; try{ $guardMutex=New-Object System.Threading.Mutex($false, "Global\BastissGuardMutex"); if(-not $guardMutex.WaitOne(0)){ exit } } catch{ exit }
 $guardLog=Join-Path $env:TEMP "bsguard.log"
 function Log($m){ try{ Add-Content -Path $guardLog -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $m" -Encoding UTF8 } catch{} }
 Log "Guard iniciado PID=$PID"
