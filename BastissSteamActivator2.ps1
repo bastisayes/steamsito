@@ -1,7 +1,7 @@
-$APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
+﻿$APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = 'C9DCF9243CE474460CDEFFD0A23921E31ACC3623C01E992E4476552B6AA671AA'
+$EXPECTED_HASH = 'F22662039EFF1C826EA93843F75F74AA1FEF537FF04A066270EE4689D7B90906'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -169,3 +169,4 @@ $n.Visible = $true
 $n.ShowBalloonTip(3000, 'BastissSteam Activator', 'El programa se instalo y abrio correctamente.', [System.Windows.Forms.ToolTipIcon]::Info)
 Start-Sleep -Seconds 4
 $n.Dispose()
+
