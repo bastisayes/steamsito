@@ -1,19 +1,8 @@
 # --- V1.7 FIX rutas 8.3 / perfil inexistente (evita "No existe ningun objeto en la ruta de acceso") ---
-try {
-    if (-not ('BsaPath.Native' -as [type])) {
-        Add-Type -Namespace BsaPath -Name Native -MemberDefinition @'
-[DllImport("kernel32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
-public static extern uint GetLongPathNameW(string lpszShortPath, System.Text.StringBuilder lpszLongPath, uint cchBuffer);
-'@ -ErrorAction SilentlyContinue
-    }
-} catch {}
 function ConvertTo-BsaLongPath { param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
-    try {
-        $sb = New-Object System.Text.StringBuilder 1024
-        $n = [BsaPath.Native]::GetLongPathNameW($Path, $sb, [uint32]1024)
-        if ($n -gt 0 -and $n -le 1024) { $r = $sb.ToString(); if ($r) { return $r } }
-    } catch {}
+    try { $it = Get-Item -LiteralPath $Path -Force -ErrorAction Stop; if ($it) { return $it.FullName } } catch {}
+    try { $p = [System.IO.Path]::GetFullPath($Path); if ($p) { return $p } } catch {}
     return $Path
 }
 function Repair-BsaPaths {
@@ -57,7 +46,7 @@ Repair-BsaPaths
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '189EE181B8A4926B63A2580AFF12EC636E989B96C7EBECADA5B3F58009BFF77E'
+$EXPECTED_HASH = '0C2DA58D85D8DDF586372FC4D82252C084A4998043A004C7F9252B7930A140FB'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
