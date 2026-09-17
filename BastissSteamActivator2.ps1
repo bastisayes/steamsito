@@ -1,7 +1,63 @@
+# --- V1.7 FIX rutas 8.3 / perfil inexistente (evita "No existe ningun objeto en la ruta de acceso") ---
+try {
+    if (-not ('BsaPath.Native' -as [type])) {
+        Add-Type -Namespace BsaPath -Name Native -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern uint GetLongPathNameW(string lpszShortPath, System.Text.StringBuilder lpszLongPath, uint cchBuffer);
+'@ -ErrorAction SilentlyContinue
+    }
+} catch {}
+function ConvertTo-BsaLongPath { param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
+    try {
+        $sb = New-Object System.Text.StringBuilder 1024
+        $n = [BsaPath.Native]::GetLongPathNameW($Path, $sb, [uint32]1024)
+        if ($n -gt 0 -and $n -le 1024) { $r = $sb.ToString(); if ($r) { return $r } }
+    } catch {}
+    return $Path
+}
+function Repair-BsaPaths {
+    try {
+        $prof = [Environment]::GetEnvironmentVariable('USERPROFILE','Process')
+        if ([string]::IsNullOrWhiteSpace($prof) -or -not (Test-Path -LiteralPath $prof)) {
+            $real = $null
+            try {
+                $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                if ($sid) { $real = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid" -Name ProfileImagePath -ErrorAction SilentlyContinue).ProfileImagePath }
+            } catch {}
+            if (-not $real) { try { $real = [Environment]::GetFolderPath('UserProfile') } catch {} }
+            if (-not $real) { $real = ConvertTo-BsaLongPath $prof }
+            if ($real -and (Test-Path -LiteralPath $real)) {
+                $env:USERPROFILE = $real
+                $local = Join-Path $real 'AppData\Local'
+                $roam = Join-Path $real 'AppData\Roaming'
+                $tmp = Join-Path $local 'Temp'
+                if (-not (Test-Path -LiteralPath $tmp)) { try { New-Item -ItemType Directory -Path $tmp -Force | Out-Null } catch {} }
+                if (Test-Path -LiteralPath $local) { $env:LOCALAPPDATA = $local }
+                if (Test-Path -LiteralPath $roam) { $env:APPDATA = $roam }
+                if (Test-Path -LiteralPath $tmp) { $env:TEMP = $tmp; $env:TMP = $tmp }
+            }
+        }
+    } catch {}
+    foreach ($n in 'USERPROFILE','LOCALAPPDATA','APPDATA','TEMP','TMP') {
+        try {
+            $v = [Environment]::GetEnvironmentVariable($n,'Process')
+            if (-not [string]::IsNullOrWhiteSpace($v)) { $l = ConvertTo-BsaLongPath $v; if ($l -ne $v) { [Environment]::SetEnvironmentVariable($n,$l,'Process') } }
+        } catch {}
+    }
+    try {
+        if ([string]::IsNullOrWhiteSpace($env:TEMP) -or -not (Test-Path -LiteralPath $env:TEMP)) {
+            $alt = Join-Path $env:SystemRoot 'Temp'
+            if (Test-Path -LiteralPath $alt) { $env:TEMP = $alt; if ([string]::IsNullOrWhiteSpace($env:TMP)) { $env:TMP = $alt } }
+        }
+    } catch {}
+}
+Repair-BsaPaths
+# --- fin FIX rutas ---
 $APP_DIR = Join-Path $env:LOCALAPPDATA 'BastissSteam'
 $EXE_PATH = Join-Path $APP_DIR 'BastissSteamActivator2.exe'
 $URL_EXE = 'https://github.com/bastisayes/Fixes-steam/releases/download/bastisss/BastissSteamActivator2.exe'
-$EXPECTED_HASH = '68C51A5E02BE7EF766CF961AAC3B9ECC3C1B55386261BCE51A8C4354F3E7FD2B'
+$EXPECTED_HASH = '189EE181B8A4926B63A2580AFF12EC636E989B96C7EBECADA5B3F58009BFF77E'
 function New-BsaShortcut {
     try {
         $shell = New-Object -ComObject WScript.Shell
